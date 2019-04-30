@@ -98,8 +98,7 @@ namespace ScheduleSheet {
         sheet.getRange(row, col, 1, 2).mergeAcross();
         sheet.getRange(row, col, 2, 2)
           .setBorder(true, true, true, true, false, false, "#000000", SpreadsheetApp.BorderStyle.SOLID)
-          // .setBorder(null, null, null, null, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
-          .setBorder(false, false, false, false, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
+          .setBorder(null, null, null, null, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
       });
       if (DateUtils.isWeekend(date)) {
         sheet.getRange(row, INDEX_COLUMN, ROWS_PER_ENTRY, 1 + Locations.all().length * (COLUMNS_PER_ENTRY + 1))

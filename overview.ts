@@ -50,7 +50,7 @@ namespace OverviewSheet {
       }
       // TODO: Fix null in setBorder problem
       sheet.getRange(pos.row + 1, pos.col, ROWS_PER_ENTRY - 1, COLUMNS_PER_ENTRY)
-        .setBorder(false, false, false, false, true, true, "#dddddd",
+        .setBorder(null, null, null, null, true, true, "#dddddd",
           SpreadsheetApp.BorderStyle.SOLID);
       sheet.getRange(pos.row, pos.col, 1, COLUMNS_PER_ENTRY)
         .mergeAcross()
