@@ -40,8 +40,8 @@ namespace DataSheet {
       const shiftStop = Values.asNumber(row[5]);
       const shiftBreakLength = Values.asNumber(row[6]);
       Logger.log("DataSheet: %s", locationName);
-      const location = Locations.byName(locationName);
-      const shift = Shifts.byName(shiftName);
+      const location = Prelude.unwrap(Locations.byName(locationName));
+      const shift = Prelude.unwrap(Shifts.byName(shiftName));
       // TODO: validate shift settings?  Think about the potential mismatch
       f({ date, employee, location, shift });
     });

@@ -61,7 +61,8 @@ namespace Main {
       return {
         employee : ps.employee,
         date : ps.date,
-        location : whoAndWhere[ps.employee].location,
+        // TODO: Handle error properly
+        location : Prelude.unwrap(whoAndWhere[ps.employee].location),
         shift : ps.shift,
       };
     });

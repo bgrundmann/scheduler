@@ -10,7 +10,7 @@ namespace Locations {
     { name : "Extras" },
   ].map ((l, ndx) => ({ ...l, ndx }) );
 
-  let byNameCache: (name: string) => ILocation = null;
+  let byNameCache: ((name: string) => ILocation|undefined)|undefined;
 
   export function all(): ILocation[] { return theList; }
 

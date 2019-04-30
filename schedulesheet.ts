@@ -9,7 +9,7 @@ namespace ScheduleSheet {
   const spreadsheet = SpreadsheetApp.getActive();
   const sheet = spreadsheet.getSheetByName("Schedule");
 
-  let dateRangeCache: { from: Date, until: Date } = null;
+  let dateRangeCache: { from: Date, until: Date }|undefined;
 
   // Return the date range as given by the 'von' -> 'bis' cells
   export function dateRange(): { from: Date, until: Date } {
@@ -69,7 +69,7 @@ namespace ScheduleSheet {
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(1);
     sheet.setFrozenColumns(FIRST_ENTRY_COLUMN - 2);
-    dateRangeCache = null;
+    dateRangeCache = undefined;
     sheet.getRange(1, 1, 1, 4).setValues([["Von", fDate, "bis", tDate]]);
     sheet.getRangeList(["A1", "C1"]).setFontWeight("bold").setHorizontalAlignment("right");
     sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
@@ -94,10 +94,12 @@ namespace ScheduleSheet {
       Locations.all().forEach((loc) => {
         const col = entryColumn(date, loc);
 
+        // TODO: fix d.ts file for range
         sheet.getRange(row, col, 1, 2).mergeAcross();
         sheet.getRange(row, col, 2, 2)
-          .setBorder(true, true, true, true, null, null, "#000000", SpreadsheetApp.BorderStyle.SOLID)
-          .setBorder(null, null, null, null, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
+          .setBorder(true, true, true, true, false, false, "#000000", SpreadsheetApp.BorderStyle.SOLID)
+          // .setBorder(null, null, null, null, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
+          .setBorder(false, false, false, false, true, true, "#dddddd", SpreadsheetApp.BorderStyle.SOLID);
       });
       if (DateUtils.isWeekend(date)) {
         sheet.getRange(row, INDEX_COLUMN, ROWS_PER_ENTRY, 1 + Locations.all().length * (COLUMNS_PER_ENTRY + 1))

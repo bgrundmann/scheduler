@@ -86,18 +86,22 @@ namespace DoodleParser {
         column, month, monthAndYears[month], day, days[day], time, times[time]);
       let r = monthAndYearRegex.exec(monthAndYears[month].value);
       if (r == null) {
-        // problem
+        throw Error("Failed to parse month and year in doodle");
       }
-      // Parser would be more robust if this lookup failed with an error message as well
-      const monthValue = germanMonthNames[r[1]];
+      const monthValue = Prelude.unwrap(germanMonthNames[r[1]]);
       const year2 = Number(r[2]);
 
-      // Parser would be more robust if this lookup failed with an error message as well
       r = dayRegex.exec(days[day].value);
+      if (r == null) {
+        throw Error("Failed to parse day in doodle");
+      }
       const dayValue = Number(r[2]);
 
       // Parser would be more robust if this lookup failed with an error message as well
       r = timeRegex.exec(times[time].value);
+      if (r == null) {
+        throw Error("Failed to parse time in doodle");
+      }
       const timeStartHour = Number(r[1]);
       const timeStartMinute = Number(r[2]);
       const timeEndHour = Number(r[3]);
@@ -140,8 +144,10 @@ namespace DoodleParser {
               shift = Shifts.byName("Ganztags");
             } else if (d.timeStartHour === 13) {
               shift = Shifts.byName("Nachmittags");
+            } else {
+              throw Error("Don't know how to convert hours into shift");
             }
-            result.push([name, date, start, end, shift.name]);
+            result.push([name, date, start, end, shift!.name]);
           }
       }
     });

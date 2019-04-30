@@ -24,4 +24,11 @@ namespace Prelude {
     forEach((elem: T) => { if (filter(elem)) { res.push(elem); } });
     return res;
   }
+
+  export function unwrap<T>(x: T|undefined|null): T {
+    if (x !== undefined && x !== null) {
+      return x;
+    }
+    throw new Error("Failed to unwrap");
+  }
 }

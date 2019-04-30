@@ -28,8 +28,8 @@ namespace EmployeeSheet {
     return dict;
   }
 
-  let allCached: IEmployee[] = null;
-  let byAliasAndHandleCached: Record<string, IEmployee> = null;
+  let allCached: IEmployee[] | undefined;
+  let byAliasAndHandleCached: Record<string, IEmployee>|undefined;
 
   export function all(): IEmployee[] {
     if (!allCached) {

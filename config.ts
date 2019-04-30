@@ -23,9 +23,9 @@ namespace Shifts {
   export const all = // in the order they appear on the data sheet
       [ Shifts.firstHalf, Shifts.secondHalf, Shifts.whole ];
 
-  let byNameCache: (name: string) => IShift = null;
+  let byNameCache: ( (name: string) => IShift | undefined ) | undefined ;
 
-  export function byName(name: string): IShift {
+  export function byName(name: string): IShift | undefined {
     if (!byNameCache) {
       byNameCache = Prelude.makeFindByName(Shifts.all);
     }

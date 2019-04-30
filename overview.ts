@@ -6,13 +6,13 @@ namespace OverviewSheet {
   const COLUMNS_PER_ENTRY = 2;
   const FIRST_ENTRY_ROW = 2;
   const FIRST_ENTRY_COLUMN = 2;
-  let mondayStartingFirstWeek: Date = null;
-  let fromDate: Date = null;
-  let toDate: Date = null;
+  let mondayStartingFirstWeek: Date|undefined;
+  let fromDate: Date|undefined;
+  let toDate: Date|undefined;
 
   function entryPosition(date: Date) {
     const col = DateUtils.dayOfWeekStartingMonday(date);
-    const days = DateUtils.daysBetween(mondayStartingFirstWeek, date);
+    const days = DateUtils.daysBetween(Prelude.unwrap(mondayStartingFirstWeek), date);
     const row = Math.floor(days / 7);
     return { row : (row * ROWS_PER_ENTRY) + FIRST_ENTRY_ROW, col : (col * COLUMNS_PER_ENTRY) + FIRST_ENTRY_COLUMN };
   }
@@ -48,8 +48,9 @@ namespace OverviewSheet {
       if (DateUtils.isWeekend(date)) {
         box.setBackground(Config.WEEKEND_COLOR);
       }
+      // TODO: Fix null in setBorder problem
       sheet.getRange(pos.row + 1, pos.col, ROWS_PER_ENTRY - 1, COLUMNS_PER_ENTRY)
-        .setBorder(null, null, null, null, true, true, "#dddddd",
+        .setBorder(false, false, false, false, true, true, "#dddddd",
           SpreadsheetApp.BorderStyle.SOLID);
       sheet.getRange(pos.row, pos.col, 1, COLUMNS_PER_ENTRY)
         .mergeAcross()

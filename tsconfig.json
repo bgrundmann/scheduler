@@ -4,9 +4,18 @@
     "checkJs" : true,
     "target" : "es5",
     "noImplicitAny" : true,
+    "noImplicitReturns" : true,
+    "noEmitOnError" : true,
+    "noImplicitThis" : true,
+    "noFallthroughCasesInSwitch": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
     "lib" : [
       "es2015"
       ],
-    "types" : ["google-apps-script"]
+    "types" : ["google-apps-script"],
+    "outDir" : "build"
   }
 }

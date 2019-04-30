@@ -41,8 +41,8 @@ namespace Values {
       if (e instanceof ValueConversionError) {
         e.row = row;
         e.column = col;
-        throw e;
       }
+      throw e;
     }
   }
 }
