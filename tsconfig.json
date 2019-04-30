@@ -1,0 +1,12 @@
+{ 
+  "compilerOptions": {
+    "allowJs" : true,
+    "checkJs" : true,
+    "target" : "es5",
+    "noImplicitAny" : true,
+    "lib" : [
+      "es2015"
+      ],
+    "types" : ["google-apps-script"]
+  }
+}
