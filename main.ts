@@ -6,8 +6,11 @@
 //   - Write alternative views
 //     - A view that shows several weeks at once and only the number of employees per office
 //   - Figure out how to deploy this properly
+//     Core idea: deploy as sheet with bound script (but develop using typescript and clasp)
+//     Deploy by making named copies of the sheet.
+//     Debug by making backups and exporting that sheet
 //   - Write something to make shifts that are not in the doodle bold
-//   - Split Daten into Daten and Rest
+//   - Split Daten into Focus and History
 //   - Use regular coloring instead of conditional formatting on the schedule sheet for weekends
 namespace Main {
   export function saveEntriesFromScheduleToData() {

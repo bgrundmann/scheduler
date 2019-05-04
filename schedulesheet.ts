@@ -25,6 +25,7 @@ namespace ScheduleSheet {
   function splitNames(entry: string): string[] {
     return entry.split(",").map((e) => e.trim()).filter((e) => e !== "");
   }
+
   // setup the part of the sheet on the left that lists employees and how much they work
   function setupEmployeeSection(): void {
     const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
@@ -44,13 +45,53 @@ namespace ScheduleSheet {
     // now that sizing is done reset the values
     sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
   }
+
   // return the top left row the entry on the given date
   function entryRow(date: Date): number {
     return FIRST_ENTRY_ROW + DateUtils.daysBetween(dateRange().from, date) * ROWS_PER_ENTRY;
   }
+
   function entryColumn(date: Date, loc: Locations.ILocation): number {
     return FIRST_ENTRY_COLUMN + loc.ndx * (COLUMNS_PER_ENTRY + 1);
   }
+
+  // get the range used to store all the data
+  function getEntriesRange(): GoogleAppsScript.Spreadsheet.Range {
+    const entryRows = DateUtils.daysBetween(dateRange().from, dateRange().until) + 1;
+    return sheet.getRange(FIRST_ENTRY_ROW, FIRST_ENTRY_COLUMN,
+      entryRows * ROWS_PER_ENTRY,
+      Locations.all().length * (COLUMNS_PER_ENTRY + 1));
+  }
+
+  function forEachDayOnSheet(f: (date: Date) => void): void {
+    DateUtils.forEachDay(dateRange().from, dateRange().until, f);
+  }
+
+  /// place entries from DataSheet onto empty Schedule
+  function placeEntries(): void {
+    // const entryRange = sheet.getRange(FIRST_ENTRY_ROW, FIRST_ENTRY_COLUMN,
+    //   lastRow - FIRST_ENTRY_ROW, Locations.all().length * (COLUMNS_PER_ENTRY + 1));
+    // const data = entryRange.getValues();
+    const entryRange = getEntriesRange(); 
+    const data = entryRange.getValues();
+
+    // place entries from data sheet into schedule sheet
+    DataSheet.forEachEntry((e: Entry.IEntry) => {
+      if (DateUtils.inRangeInclusive(e.date, dateRange().from, dateRange().until)) {
+        let row = entryRow(e.date) - FIRST_ENTRY_ROW;
+        let col = entryColumn(e.date, e.location) - FIRST_ENTRY_COLUMN;
+        const offset = e.shift.entryDisplayOffset;
+        row += offset[0];
+        col += offset[1];
+        const existing = data[row][col];
+        const newValue = existing === "" ? e.employee : existing + ", " + e.employee;
+        data[row][col] = newValue;
+      }
+    });
+
+    entryRange.setValues(data);
+  }
+
   export function formulasEmployeeCount(date: Date, loc: Locations.ILocation): string[] {
     function countFormula(cell: string) {
       return "IF(ISBLANK(Schedule!" + cell + ");0;LEN(Schedule!" + cell +
@@ -63,6 +104,7 @@ namespace ScheduleSheet {
     const secondHalf = countFormula(SheetUtils.a1(row + 1, col + 1));
     return ["=" + wholeDay + "+" + firstHalf, "=" + wholeDay + "+" + secondHalf];
   }
+
   // Setup the sheet and copy the range of entries from the data sheet
   export function setup(fDate: Date, tDate: Date) {
     sheet.clear();
@@ -84,7 +126,7 @@ namespace ScheduleSheet {
     });
 
     // write the column of dates, draw the boxes and setup the formula for #people per entry
-    DateUtils.forEachDay(dateRange().from, dateRange().until, (date) => {
+    forEachDayOnSheet((date) => {
       const row = entryRow(date);
       sheet.getRange(row, INDEX_COLUMN).setValue(date).setNumberFormat('ddd", "mmmm" "d');
       sheet.getRange(row, INDEX_COLUMN, 2, 1)
@@ -106,43 +148,20 @@ namespace ScheduleSheet {
       }
     });
     sheet.autoResizeColumn(INDEX_COLUMN);
-    const lastRow = entryRow(dateRange().until) + 2;
+    placeEntries();
     sheet.getRange("B1").activate();
-
-    const entryRange = sheet.getRange(FIRST_ENTRY_ROW, FIRST_ENTRY_COLUMN,
-      lastRow - FIRST_ENTRY_ROW, Locations.all().length * (COLUMNS_PER_ENTRY + 1));
-    const data = entryRange.getValues();
-
-    // place entries from data sheet into schedule sheet
-    DataSheet.forEachEntry((e: Entry.IEntry) => {
-      if (DateUtils.inRangeInclusive(e.date, dateRange().from, dateRange().until)) {
-        let row = entryRow(e.date) - FIRST_ENTRY_ROW;
-        let col = entryColumn(e.date, e.location) - FIRST_ENTRY_COLUMN;
-        const offset = e.shift.entryDisplayOffset;
-        row += offset[0];
-        col += offset[1];
-        const existing = data[row][col];
-        const newValue = existing === "" ? e.employee : existing + ", " + e.employee;
-        data[row][col] = newValue;
-      }
-    });
-
-    entryRange.setValues(data);
   }
 
   // Call f for each entry on the schedule sheet
   export function forEachEntry(f: (schedule: Entry.IEntry) => void): void {
-    const entryRows = DateUtils.daysBetween(dateRange().from, dateRange().until) + 1;
-    const dataRange = sheet.getRange(FIRST_ENTRY_ROW, FIRST_ENTRY_COLUMN,
-      entryRows * ROWS_PER_ENTRY,
-      Locations.all().length * (COLUMNS_PER_ENTRY + 1)).getValues();
+    const data = getEntriesRange().getValues();
     Locations.all().forEach ((loc) => {
-      DateUtils.forEachDay(dateRange().from, dateRange().until, (date) => {
+      forEachDayOnSheet((date) => {
         const row = entryRow(date) - FIRST_ENTRY_ROW;
         const col = entryColumn(date, loc) - FIRST_ENTRY_COLUMN;
-        const whole = splitNames(Values.get(dataRange, row, col, Values.asString));
-        const firstHalf = splitNames(Values.get(dataRange, row + 1, col, Values.asString));
-        const secondHalf = splitNames(Values.get(dataRange, row + 1, col + 1, Values.asString));
+        const whole = splitNames(Values.get(data, row, col, Values.asString));
+        const firstHalf = splitNames(Values.get(data, row + 1, col, Values.asString));
+        const secondHalf = splitNames(Values.get(data, row + 1, col + 1, Values.asString));
         const all =
             [ { shift : Shifts.whole, names : whole },
              { shift : Shifts.firstHalf, names : firstHalf },
@@ -159,6 +178,7 @@ namespace ScheduleSheet {
       });
     });
   }
+
   // Get employees and locations to schedule as dictionary (from the left pane)
   export function employeesAndLocations() {
     const employeeCount = EmployeeSheet.all().length;
