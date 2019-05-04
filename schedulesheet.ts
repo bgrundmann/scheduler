@@ -67,11 +67,18 @@ namespace ScheduleSheet {
     DateUtils.forEachDay(dateRange().from, dateRange().until, f);
   }
 
+  // function highlightEntries(): void {
+  //   const range = getEntriesRange();
+  //   const richTexts = range.getRichTextValues();
+  //   forEachDayOnSheet((date) => {
+  //     const row = entryRow(date);
+  //     const rich = richTexts[row - FIRST_ENTRY_ROW][0];
+  //     const e = rich.copy();
+  //   });
+  // }
+
   /// place entries from DataSheet onto empty Schedule
   function placeEntries(): void {
-    // const entryRange = sheet.getRange(FIRST_ENTRY_ROW, FIRST_ENTRY_COLUMN,
-    //   lastRow - FIRST_ENTRY_ROW, Locations.all().length * (COLUMNS_PER_ENTRY + 1));
-    // const data = entryRange.getValues();
     const entryRange = getEntriesRange(); 
     const data = entryRange.getValues();
 
