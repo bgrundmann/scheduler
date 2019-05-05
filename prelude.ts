@@ -32,3 +32,18 @@ namespace Prelude {
     throw new Error("Failed to unwrap");
   }
 }
+
+interface Array<T> {
+  intersperse(sep: T): T[];
+}
+
+Array.prototype.intersperse = function<T> (sep: T) {
+  const result: T[] = [];
+  this.forEach((x) => {
+    if (result.length !== 0) {
+      result.push(sep);
+    }
+    result.push(x);
+  });
+  return result;
+};
