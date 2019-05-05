@@ -79,6 +79,7 @@ namespace ScheduleSheet {
 
   const boldStyle = SpreadsheetApp.newTextStyle().setBold(true).build();
   const normalStyle = SpreadsheetApp.newTextStyle().build();
+  const errorStyle = SpreadsheetApp.newTextStyle().setForegroundColor("red").setBold(true).build();
 
   /// place entries from DataSheet onto empty Schedule
   function placeEntries(): void {
@@ -95,7 +96,21 @@ namespace ScheduleSheet {
         col += offset[1];
         const elements =
           entries.map( (e: Entry.IEntry) => {
-            return { text: e.employee, style: boldStyle };
+            let style = normalStyle;
+            switch (e.employee) {
+              case undefined:
+                style = normalStyle;
+                break;
+
+              case "not-in-poll":
+                style = boldStyle;
+                break;
+
+              case "unknown-employee":
+                style = errorStyle;
+                break;
+            }
+            return { text: e.employee, style };
           }).intersperse({ text: ", ", style: normalStyle });
         data[row][col] = SheetUtils.buildRichTexts(elements);
       }
@@ -202,9 +217,4 @@ namespace ScheduleSheet {
       }));
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
-}
-
-function testThis() {
-  Logger.clear();
-  ScheduleSheet.setup(new Date("2019-04-11"), new Date("2019-05-22"));
 }

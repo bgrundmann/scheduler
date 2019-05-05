@@ -42,6 +42,7 @@ namespace DataSheet {
     clear();
     append(existingOutsideRange.concat(entries));
   }
+
   export function forEachEntry(f: (e: Entry.IEntry) => void): void {
     const data = sheet.getDataRange().getValues();
     data.shift();
@@ -65,7 +66,7 @@ namespace DataSheet {
     let cur: Entry.IEntry[] = [];
     forEachEntry((e: Entry.IEntry) => {
       if (cur.length === 0 ||
-        (cur[0].date.getTime() === e.date.getTime() && 
+        (cur[0].date.getTime() === e.date.getTime() &&
           cur[0].location.name === e.location.name &&
           cur[0].shift.name === e.shift.name)) {
         cur.push(e);
