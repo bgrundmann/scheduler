@@ -77,26 +77,30 @@ namespace ScheduleSheet {
   //   });
   // }
 
+  const boldStyle = SpreadsheetApp.newTextStyle().setBold(true).build();
+  const normalStyle = SpreadsheetApp.newTextStyle().build();
+
   /// place entries from DataSheet onto empty Schedule
   function placeEntries(): void {
-    const entryRange = getEntriesRange(); 
-    const data = entryRange.getValues();
-
+    const entryRange = getEntriesRange();
+    const data = entryRange.getRichTextValues();
     // place entries from data sheet into schedule sheet
-    DataSheet.forEachEntry((e: Entry.IEntry) => {
-      if (DateUtils.inRangeInclusive(e.date, dateRange().from, dateRange().until)) {
-        let row = entryRow(e.date) - FIRST_ENTRY_ROW;
-        let col = entryColumn(e.date, e.location) - FIRST_ENTRY_COLUMN;
-        const offset = e.shift.entryDisplayOffset;
+    DataSheet.forEachEntryGrouped((entries: Entry.IEntry[]) => {
+      const first = entries[0];
+      if (DateUtils.inRangeInclusive(first.date, dateRange().from, dateRange().until)) {
+        let row = entryRow(first.date) - FIRST_ENTRY_ROW;
+        let col = entryColumn(first.date, first.location) - FIRST_ENTRY_COLUMN;
+        const offset = first.shift.entryDisplayOffset;
         row += offset[0];
         col += offset[1];
-        const existing = data[row][col];
-        const newValue = existing === "" ? e.employee : existing + ", " + e.employee;
-        data[row][col] = newValue;
+        const elements =
+          entries.map( (e: Entry.IEntry) => {
+            return { text: e.employee, style: boldStyle };
+          }).intersperse({ text: ", ", style: normalStyle });
+        data[row][col] = SheetUtils.buildRichTexts(elements);
       }
     });
-
-    entryRange.setValues(data);
+    entryRange.setRichTextValues(data);
   }
 
   export function formulasEmployeeCount(date: Date, loc: Locations.ILocation): string[] {

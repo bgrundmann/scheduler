@@ -41,4 +41,17 @@ namespace SheetUtils {
   export function a1(row: number, col: number): string {
     return convertNumberToColumnLetter(col) + String(row);
   }
+
+  export function buildRichTexts(runs: Array< { text: string, style: GoogleAppsScript.Spreadsheet.TextStyle } >):
+  GoogleAppsScript.Spreadsheet.RichTextValue {
+    const b = SpreadsheetApp.newRichTextValue();
+    const completeText = runs.map(({ text, style }) => text).join("");
+    b.setText(completeText);
+    let off = 0;
+    runs.forEach( ({ text, style }) => {
+      b.setTextStyle(off, off + text.length, style);
+      off += text.length;
+    });
+    return b.build();
+  }
 }

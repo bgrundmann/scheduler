@@ -15,6 +15,20 @@ namespace DataSheet {
     });
     if (values.length > 0) {
       sheet.getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
+
+      // Make sure the whole sheet is still correctly sorted
+      const allData = sheet.getDataRange();
+      const withoutHeader = allData.offset(1, 0, allData.getNumRows() - 1);
+      withoutHeader.sort( [
+        // date
+        { column: 1, ascending: true },
+        // location
+        { column: 3, ascending: true },
+        // shift
+        { column: 4, ascending: true },
+        // employee
+        { column: 2, ascending: true },
+       ]);
     }
   }
   export function replaceRange(fromDate: Date, toDate: Date, entries: Entry.IEntry[]): void {
@@ -39,11 +53,29 @@ namespace DataSheet {
       const shiftStart = Values.asNumber(row[4]);
       const shiftStop = Values.asNumber(row[5]);
       const shiftBreakLength = Values.asNumber(row[6]);
-      Logger.log("DataSheet: %s", locationName);
       const location = Prelude.unwrap(Locations.byName(locationName));
       const shift = Prelude.unwrap(Shifts.byName(shiftName));
       // TODO: validate shift settings?  Think about the potential mismatch
       f({ date, employee, location, shift });
     });
+  }
+
+  // Call f with non empty lists of all entries at the same date, location and shift
+  export function forEachEntryGrouped(f: (entries: Entry.IEntry[]) => void): void {
+    let cur: Entry.IEntry[] = [];
+    forEachEntry((e: Entry.IEntry) => {
+      if (cur.length === 0 ||
+        (cur[0].date.getTime() === e.date.getTime() && 
+          cur[0].location.name === e.location.name &&
+          cur[0].shift.name === e.shift.name)) {
+        cur.push(e);
+      } else {
+        f(cur);
+        cur = [e];
+      }
+    });
+    if (cur.length !== 0) {
+      f(cur);
+    }
   }
 }
