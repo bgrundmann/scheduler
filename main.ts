@@ -25,7 +25,7 @@ namespace Main {
   export function onOpenCallback() {
     Logger.clear();
     // Make sure whatever was left on the schedule page last time is saved into the data sheet
-    saveEntriesFromScheduleToData();
+    // saveEntriesFromScheduleToData();
     // Now that is done reset the data sheet
     const d1 = new Date("2019-04-11");
     const d2 = new Date("2019-05-22");
@@ -92,6 +92,16 @@ namespace Main {
     const r = ScheduleSheet.dateRange();
     ScheduleSheet.setup(r.from, r.until);
   }
+  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
+    Logger.log("onEditCallback %s", e);
+    switch (e.range.getSheet().getName()) {
+      case ScheduleSheet.NAME:
+        ScheduleSheet.onEditCallback(e);
+        break;
+      default:
+        Logger.log("No callback for this sheet");
+    }
+  }
 }
 
 function zeitraumAendernCallback() {
@@ -137,4 +147,16 @@ function onOpen() {
   .addItem("Sicherheitskopie wiederherstellen!", "sicherheitskopieWiederherstellenCallback")
   .addToUi();
   Main.onOpenCallback();
+}
+
+function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit) {
+  Main.onEditCallback(e);
+}
+
+function initialSetup() {
+  const spreadsheet = SpreadsheetApp.getActive();
+  spreadsheet.insertSheet("Schedule");
+  spreadsheet.insertSheet("Uebersicht");
+  spreadsheet.insertSheet("Daten");
+  spreadsheet.insertSheet("Mitarbeiter");
 }

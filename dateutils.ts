@@ -6,11 +6,17 @@ namespace DateUtils {
     c.setDate(d.getDate() + 1);
     return c;
   }
+  /// Add the given number of days
+  export function addDays(d: Date, n: number): Date {
+    const c = copy(d);
+    c.setDate(d.getDate() + n);
+    return c;
+  }
   export function isWeekend(d: Date): boolean {
     const w = d.getDay();
     return w === 6 || w === 0;
   }
-  // Monday is 0, Tuesday 1, ... Sunday is 6
+  /// Monday is 0, Tuesday 1, ... Sunday is 6
   export function dayOfWeekStartingMonday(d: Date): number {
     const w = d.getDay();
     if (w === 0) {

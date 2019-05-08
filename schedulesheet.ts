@@ -5,9 +5,10 @@ namespace ScheduleSheet {
   const FIRST_ENTRY_ROW = 3;
   const ROWS_PER_ENTRY = 2;
   const COLUMNS_PER_ENTRY = 2;
+  export const NAME = "Schedule";
 
   const spreadsheet = SpreadsheetApp.getActive();
-  const sheet = spreadsheet.getSheetByName("Schedule");
+  const sheet = spreadsheet.getSheetByName(ScheduleSheet.NAME);
 
   let dateRangeCache: { from: Date, until: Date }|undefined;
 
@@ -53,6 +54,45 @@ namespace ScheduleSheet {
 
   function entryColumn(date: Date, loc: Locations.ILocation): number {
     return FIRST_ENTRY_COLUMN + loc.ndx * (COLUMNS_PER_ENTRY + 1);
+  }
+
+  function cellToEntry(row: number, column: number):
+    { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
+    if (row < FIRST_ENTRY_ROW) {
+      return undefined;
+    }
+    if (column < FIRST_ENTRY_COLUMN) {
+      return undefined;
+    }
+    const dr = dateRange();
+    const date = DateUtils.addDays( dr.from, Math.floor((row - FIRST_ENTRY_ROW) / 2) );
+    if (!DateUtils.inRangeInclusive(date, dr.from, dr.until)) {
+      return undefined;
+    }
+    const locations = Locations.all();
+    const locNdx = Math.floor((column - FIRST_ENTRY_COLUMN) / 3);
+    const vpart = (row - FIRST_ENTRY_ROW) % 2;
+    const hpart = (column - FIRST_ENTRY_COLUMN) % 3;
+    if (!DateUtils.inRangeInclusive(locNdx, 0, locations.length - 1)) {
+      return undefined;
+    }
+    // are we on the empty columns between location columns?
+    if (hpart === 2) {
+      return undefined;
+    }
+    let shift: Shifts.IShift;
+    if (hpart === 0 && vpart === 1) {
+      shift = Shifts.firstHalf;
+    } else if (hpart === 1 && vpart === 1) {
+      shift = Shifts.secondHalf;
+    } else if (vpart === 0) {
+      shift = Shifts.whole;
+    } else {
+      // Do not know what is going on
+      Logger.log("cellToEntry bug? (row=%s) (column=%s)", row, column);
+      return undefined;
+    }
+    return { date, location: locations[locNdx], shift };
   }
 
   // get the range used to store all the data
@@ -216,5 +256,13 @@ namespace ScheduleSheet {
         location : Locations.byName(Values.asString(row[2])),
       }));
     return Prelude.makeDictionary(data, (d) => d.employee);
+  }
+
+  /// Called on edit of a cell
+  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
+    // Next call the cellToEntry function and verify that the function works
+    // then use old and new value to do incremental computation if range is a
+    // single cell.  Otherwise call the longer computation.
+    Logger.log("onEditCallback %s", cellToEntry(e.range.getRow(), e.range.getColumn()) || "undefined");
   }
 }

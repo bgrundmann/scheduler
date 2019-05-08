@@ -1,1 +1,18 @@
-{"scriptId":"18chFpoeH89g9eOpwmKRf37K5VNUGqejKw3UQ88WBvzNTuWN9jiMbFZU6"}
+{ "scriptId":"1GgNTRrnmG8hQsrk_DQwVk5biOdpWsNHrMOg2gZth1LCfQSaxBEIt1G3l",
+ "filePushOrder": [
+    "prelude.ts",
+    "dateutils.ts",
+    "sheetutils.ts",
+    "values.ts",
+    "locations.ts",
+    "config.ts",
+    "entry.ts",
+    "datasheet.ts",
+    "doodleparser.ts",
+    "employeesheet.ts",
+    "pollsheet.ts",
+    "schedulesheet.ts",
+    "overview.ts",
+    "main.ts"
+ ] 
+}
