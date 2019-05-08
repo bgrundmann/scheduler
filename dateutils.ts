@@ -28,6 +28,9 @@ namespace DateUtils {
   export function inRangeInclusive<T extends number|Date>(d: T, low: T, upp: T): boolean {
     return low <= d && d <= upp;
   }
+  export function equal(d1: Date, d2: Date): boolean {
+    return d1.getTime() === d2.getTime();
+  }
   export function forEachDay(lower: Date, upper: Date, f: (d: Date) => void): void {
     let d = lower;
     while (d <= upper) {

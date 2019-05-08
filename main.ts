@@ -69,7 +69,7 @@ namespace Main {
         shift : ps.shift,
       };
     });
-    DataSheet.append(entries);
+    DataSheet.add(entries);
     ScheduleSheet.setup(range.from, range.until);
   }
   export function backup() {

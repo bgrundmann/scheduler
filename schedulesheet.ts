@@ -260,9 +260,13 @@ namespace ScheduleSheet {
 
   /// Called on edit of a cell
   export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
-    // Next call the cellToEntry function and verify that the function works
-    // then use old and new value to do incremental computation if range is a
-    // single cell.  Otherwise call the longer computation.
-    Logger.log("onEditCallback %s", cellToEntry(e.range.getRow(), e.range.getColumn()) || "undefined");
+    const entry = cellToEntry(e.range.getRow(), e.range.getColumn());
+    if (entry !== undefined) {
+      Logger.log("onEditCallback found: %s", entry);
+      DataSheet.removeMatching(entry.date, entry.location.name, entry.shift.name);
+      const employees = splitNames(e.value);
+      const entries = employees.map((name: string) => ({ employee: name, ...entry }));
+      DataSheet.add(entries);
+    }
   }
 }

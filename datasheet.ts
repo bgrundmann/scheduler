@@ -7,7 +7,8 @@ namespace DataSheet {
       sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clear();
     }
   }
-  export function append(entries: Entry.IEntry[]): void {
+  /// Add additional entries, keeps the worksheet sorted.
+  export function add(entries: Entry.IEntry[]): void {
     const values = entries.map((e) => {
       return [ e.date, e.employee, e.location.name, e.shift.name,
         e.shift.start, e.shift.stop, e.shift.breakLength,
@@ -31,6 +32,35 @@ namespace DataSheet {
        ]);
     }
   }
+  /// Remove all entries with matching values
+  export function removeMatching(date: Date, locationName: string, shiftName: string): void {
+    // Given the sorting (see append), all relevant rows will be consecutive
+    const allData = sheet.getDataRange();
+    const withoutHeader = allData.offset(1, 0, allData.getNumRows() - 1);
+    const data = withoutHeader.getValues();
+    function matches(row: any[]) {
+      return (DateUtils.equal(Values.asDate(row[0]), date) &&
+        row[2] === locationName && row[3] === shiftName);
+    }
+    let firstRow = 0;
+    while (firstRow < data.length && !matches(data[firstRow])) {
+      firstRow++;
+    }
+    if (firstRow >= data.length) {
+      // No matching entries.
+      return;
+    }
+    Logger.log("firstRow: %s", firstRow);
+    // At least one matching entry, find more...
+    let rows = 1;
+    while (firstRow + rows < data.length && matches(data[firstRow + rows])) {
+      rows++;
+    }
+    // firstRow is 0 based, Add one because deleteRows is 1 based and one more
+    // for the header
+    sheet.deleteRows(firstRow + 2, rows);
+  }
+
   export function replaceRange(fromDate: Date, toDate: Date, entries: Entry.IEntry[]): void {
     const existingOutsideRange: Entry.IEntry[] = [];
     forEachEntry((e) => {
@@ -40,7 +70,7 @@ namespace DataSheet {
       }
     });
     clear();
-    append(existingOutsideRange.concat(entries));
+    add(existingOutsideRange.concat(entries));
   }
 
   export function forEachEntry(f: (e: Entry.IEntry) => void): void {
