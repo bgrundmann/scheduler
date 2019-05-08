@@ -54,4 +54,9 @@ namespace SheetUtils {
     });
     return b.build();
   }
+
+  /// is the given range a single cell?
+  export function isCell(r: GoogleAppsScript.Spreadsheet.Range): boolean {
+    return r.getNumColumns() === 1 && r.getNumRows() === 1;
+  }
 }

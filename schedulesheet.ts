@@ -27,24 +27,12 @@ namespace ScheduleSheet {
     return entry.split(",").map((e) => e.trim()).filter((e) => e !== "");
   }
 
-  // setup the part of the sheet on the left that lists employees and how much they work
-  function setupEmployeeSection(): void {
-    const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
-    sheet.getRange(FIRST_ENTRY_ROW - 1, 1, 1, 3).setValues([["Mitarbeiter", "Stunden", ""]]).setFontWeight("bold");
-    sheet.getRange(FIRST_ENTRY_ROW, 1, employees.length, 1).setValues(employees);
-    const oneCell =
-      sheet.getRange(FIRST_ENTRY_ROW, 2)
-      .setFormula('=SUMIFS(Daten!H$2:H; Daten!B$2:B; "="&A3; Daten!A$2:A; ">="&$B$1; Daten!A$2:A; "<="&$D$1)')
-    .copyTo(sheet.getRange(FIRST_ENTRY_ROW, 2, employees.length, 1));
-    const locs = Locations.all().map((c) => c.name);
-    const rule = SpreadsheetApp.newDataValidation().requireValueInList(locs).build();
-    sheet.getRange(FIRST_ENTRY_ROW, 3, employees.length, 1).setDataValidation(rule);
-    // temporarily set entries for sizing
-    sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [l]));
-    sheet.getRange(FIRST_ENTRY_ROW - 1, 1, employees.length + 1, 3).applyRowBanding();
-    sheet.autoResizeColumns(1, 4);
-    // now that sizing is done reset the values
-    sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
+  export function validateEntry(entry: string): boolean {
+    const employees = EmployeeSheet.byAliasAndHandle();
+    return entry.split(",").map((e) => e.trim()).every((e) => {
+      const emp = employees[e];
+      return emp && emp.employee === e;
+    });
   }
 
   // return the top left row the entry on the given date
@@ -56,6 +44,7 @@ namespace ScheduleSheet {
     return FIRST_ENTRY_COLUMN + loc.ndx * (COLUMNS_PER_ENTRY + 1);
   }
 
+  // TODO: Rename cellToEntry
   function cellToEntry(row: number, column: number):
     { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
     if (row < FIRST_ENTRY_ROW) {
@@ -121,6 +110,29 @@ namespace ScheduleSheet {
   const normalStyle = SpreadsheetApp.newTextStyle().build();
   const errorStyle = SpreadsheetApp.newTextStyle().setForegroundColor("red").setBold(true).build();
 
+  // TODO: Need better name and type for EntryGroup
+  function layoutEntryGroup(entries: Entry.IEntry[]): GoogleAppsScript.Spreadsheet.RichTextValue {
+    const elements =
+      entries.map((e: Entry.IEntry) => {
+        let style = normalStyle;
+        switch (e.employee) {
+          case undefined:
+            style = normalStyle;
+            break;
+
+          case "not-in-poll":
+            style = boldStyle;
+            break;
+
+          case "unknown-employee":
+            style = errorStyle;
+            break;
+        }
+        return { text: e.employee, style };
+      }).intersperse({ text: ", ", style: normalStyle });
+    return SheetUtils.buildRichTexts(elements);
+  }
+
   /// place entries from DataSheet onto empty Schedule
   function placeEntries(): void {
     const entryRange = getEntriesRange();
@@ -134,25 +146,7 @@ namespace ScheduleSheet {
         const offset = first.shift.entryDisplayOffset;
         row += offset[0];
         col += offset[1];
-        const elements =
-          entries.map( (e: Entry.IEntry) => {
-            let style = normalStyle;
-            switch (e.employee) {
-              case undefined:
-                style = normalStyle;
-                break;
-
-              case "not-in-poll":
-                style = boldStyle;
-                break;
-
-              case "unknown-employee":
-                style = errorStyle;
-                break;
-            }
-            return { text: e.employee, style };
-          }).intersperse({ text: ", ", style: normalStyle });
-        data[row][col] = SheetUtils.buildRichTexts(elements);
+        data[row][col] = layoutEntryGroup(entries);
       }
     });
     entryRange.setRichTextValues(data);
@@ -169,6 +163,26 @@ namespace ScheduleSheet {
     const firstHalf = countFormula(SheetUtils.a1(row + 1, col));
     const secondHalf = countFormula(SheetUtils.a1(row + 1, col + 1));
     return ["=" + wholeDay + "+" + firstHalf, "=" + wholeDay + "+" + secondHalf];
+  }
+
+  // setup the part of the sheet on the left that lists employees and how much they work
+  function setupEmployeeSection(): void {
+    const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
+    sheet.getRange(FIRST_ENTRY_ROW - 1, 1, 1, 3).setValues([["Mitarbeiter", "Stunden", ""]]).setFontWeight("bold");
+    sheet.getRange(FIRST_ENTRY_ROW, 1, employees.length, 1).setValues(employees);
+    const oneCell =
+      sheet.getRange(FIRST_ENTRY_ROW, 2)
+      .setFormula('=SUMIFS(Daten!H$2:H; Daten!B$2:B; "="&A3; Daten!A$2:A; ">="&$B$1; Daten!A$2:A; "<="&$D$1)')
+    .copyTo(sheet.getRange(FIRST_ENTRY_ROW, 2, employees.length, 1));
+    const locs = Locations.all().map((c) => c.name);
+    const rule = SpreadsheetApp.newDataValidation().requireValueInList(locs).build();
+    sheet.getRange(FIRST_ENTRY_ROW, 3, employees.length, 1).setDataValidation(rule);
+    // temporarily set entries for sizing
+    sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [l]));
+    sheet.getRange(FIRST_ENTRY_ROW - 1, 1, employees.length + 1, 3).applyRowBanding();
+    sheet.autoResizeColumns(1, 4);
+    // now that sizing is done reset the values
+    sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
   }
 
   // Setup the sheet and copy the range of entries from the data sheet
@@ -216,6 +230,8 @@ namespace ScheduleSheet {
     sheet.autoResizeColumn(INDEX_COLUMN);
     placeEntries();
     sheet.getRange("B1").activate();
+    // TODO: make validation call is_valid_schedule_entry
+    // const rule=SpreadsheetApp.newDataValidation().requireFormulaSatisfied("=IS_VALID_SCHEDULE_ENTRY")
   }
 
   // Call f for each entry on the schedule sheet
@@ -260,13 +276,41 @@ namespace ScheduleSheet {
 
   /// Called on edit of a cell
   export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
+    // check if range is bigger than one cell and if so just recreate the
+    // range of the data sheet that is on the schedule.  That is we only
+    // try to do minimal work when only single cell was changed.
+    // Annoyingly the below turned out not to work (contrary to the docs)
+    // as even when I had selected multiple cells NumRows and NumColumns was
+    // always 1.  So I get that check (in case this ever gets fixed) but
+    // also added a check for the active selection.
+    // if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
+    const activeRange = sheet.getActiveRange();
+    if (SheetUtils.isCell(activeRange) && SheetUtils.isCell(e.range)) {
+      const range = dateRange();
+      const entriesOnSchedule = Prelude.forEachAsList(forEachEntry);
+      DataSheet.replaceRange(range.from, range.until, entriesOnSchedule);
+      // TODO: redraw everything in this case?
+      return;
+    }
+    // Otherwise do the one cell fast path:
+    // figure out which entry was changed, if any
     const entry = cellToEntry(e.range.getRow(), e.range.getColumn());
+    // Change wasn't of a entry cell so we are good.
     if (entry !== undefined) {
-      Logger.log("onEditCallback found: %s", entry);
+      // remove any relevant existing entries in the datasheet
       DataSheet.removeMatching(entry.date, entry.location.name, entry.shift.name);
+      // and create new ones.
       const employees = splitNames(e.value);
       const entries = employees.map((name: string) => ({ employee: name, ...entry }));
       DataSheet.add(entries);
+      // And also redraw that one cell
+      // e.range.setRichTextValue(layoutEntryGroup(entries));
+      // sheet.getRange(e.range.getRow(), e.range.getColumn()).setValue("TEST");
     }
   }
+}
+
+/** @customfunction */
+function IS_VALID_SCHEDULE_ENTRY(cell: any) {
+  return typeof cell === "string" && ScheduleSheet.validateEntry(cell);
 }
