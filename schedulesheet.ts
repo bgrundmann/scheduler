@@ -169,7 +169,14 @@ namespace ScheduleSheet {
   function setupEmployeeSection(): void {
     const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
     sheet.getRange(FIRST_ENTRY_ROW - 1, 1, 1, 3).setValues([["Mitarbeiter", "Stunden", ""]]).setFontWeight("bold");
-    sheet.getRange(FIRST_ENTRY_ROW, 1, employees.length, 1).setValues(employees);
+    const employeesRange = sheet.getRange(FIRST_ENTRY_ROW, 1, employees.length, 1);
+    // const employeeInDoodleRule = SpreadsheetApp.newConditionalFormatRule()
+    //   .whenFormulaSatisfied("=ISNA(VLOOKUP(A3; UmfrageAlsTabelle!A2:A; 1; FALSE))")
+    //   .setItalic(true)
+    //   .setRanges([employeesRange])
+    //   .build();
+    // sheet.setConditionalFormatRules([employeeInDoodleRule]);
+    employeesRange.setValues(employees);
     const oneCell =
       sheet.getRange(FIRST_ENTRY_ROW, 2)
       .setFormula('=SUMIFS(Daten!H$2:H; Daten!B$2:B; "="&A3; Daten!A$2:A; ">="&$B$1; Daten!A$2:A; "<="&$D$1)')
@@ -188,6 +195,7 @@ namespace ScheduleSheet {
   /** Setup the sheet and copy the range of entries from the data sheet. */
   export function setup(fDate: Date, tDate: Date): void {
     sheet.clear();
+    sheet.clearConditionalFormatRules();
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(1);
     sheet.setFrozenColumns(FIRST_ENTRY_COLUMN - 2);

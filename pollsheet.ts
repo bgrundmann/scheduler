@@ -25,23 +25,12 @@ namespace PollSheet {
 
   // Each employee only once per date and with the longest available shift
   export function forEachUnique(f: (poll: IPoll) => void): void {
-    function len(x: IPoll) { return x.shift.stop - x.shift.start; }
     let last: IPoll|undefined;
     forEach((p) => {
-      if (last === undefined) {
+      if (!last || last.employee !== p.employee || !DateUtils.equal(last.date, p.date)) {
         last = p;
-      } else if (last.employee === p.employee && last.date.getTime() === p.date.getTime()) {
-        // choose the longer one
-        if (len(p) > len(last)) {
-          last = p;
-        }
-      } else {
-        f(last);
-        last = p;
+        f(p);
       }
     });
-    if (last) {
-      f(last);
-    }
   }
 }

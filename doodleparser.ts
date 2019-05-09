@@ -159,7 +159,7 @@ namespace DoodleParser {
     if (result.length > 0) {
       data.getRange(2, 1, result.length, result[0].length)
       .setValues(result)
-      .offset(1, 0, result.length - 1).sort([{column: 2, ascending: true}, {column: 1, ascending: true}]);
+      .sort([{column: 2, ascending: true}, {column: 1, ascending: true}, {column: 5, ascending:true}]);
     }
     data.getRange(2, 3, result.length, 2).setNumberFormat("hh:mm");
   }
