@@ -9,6 +9,15 @@ namespace SheetUtils {
     }
     return sheet;
   }
+  export function getDataRangeWithoutHeader(sheet: GoogleAppsScript.Spreadsheet.Sheet):
+    GoogleAppsScript.Spreadsheet.Range | undefined {
+    const allData = sheet.getDataRange();
+    if (allData.getNumRows() > 1) {
+      return allData.offset(1, 0, allData.getNumRows() - 1, allData.getNumColumns());
+    } else {
+      return undefined;
+    }
+  }
   export function deleteSheetByNameIfExists(name: string): void {
     const ss = SpreadsheetApp.getActive();
     const sheet = ss.getSheetByName(name);

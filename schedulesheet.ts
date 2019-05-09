@@ -44,13 +44,13 @@ namespace ScheduleSheet {
     return FIRST_ENTRY_COLUMN + loc.ndx * (COLUMNS_PER_ENTRY + 1);
   }
 
-  // TODO: Rename cellToEntry
-  function cellToEntry(row: number, column: number):
-    { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
+  function noteColumn(): number {
+    return FIRST_ENTRY_COLUMN + Locations.all().length * (COLUMNS_PER_ENTRY + 1) + 1;
+  }
+
+  /** Convert row number into date. */
+  function rowToDate(row: number): Date|undefined {
     if (row < FIRST_ENTRY_ROW) {
-      return undefined;
-    }
-    if (column < FIRST_ENTRY_COLUMN) {
       return undefined;
     }
     const dr = dateRange();
@@ -58,6 +58,17 @@ namespace ScheduleSheet {
     if (!DateUtils.inRangeInclusive(date, dr.from, dr.until)) {
       return undefined;
     }
+    return date;
+  }
+
+  // TODO: Rename cellToEntry
+  function cellToEntry(row: number, column: number):
+    { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
+    if (column < FIRST_ENTRY_COLUMN) {
+      return undefined;
+    }
+    const date = rowToDate(row);
+    if (!date) { return undefined; }
     const locations = Locations.all();
     const locNdx = Math.floor((column - FIRST_ENTRY_COLUMN) / 3);
     const vpart = (row - FIRST_ENTRY_ROW) % 2;
@@ -192,6 +203,19 @@ namespace ScheduleSheet {
     sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
   }
 
+  function setupNoteSection() {
+    const dr = dateRange();
+    const col = noteColumn();
+    sheet.getRange(FIRST_ENTRY_ROW, col, ROWS_PER_ENTRY * (DateUtils.daysBetween(dr.from, dr.until) + 1), 1)
+    .setBackgroundRGB(255, 255, 153);
+    sheet.getRange(FIRST_ENTRY_ROW - 1, col).setValue("Notizen").setFontWeight("bold");
+    sheet.autoResizeColumn(col);
+    // TODO: if Andi starts using notes a lot switch to single setValues call
+    NoteSheet.forEachEntryInRange(dr.from, dr.until, (note) => {
+      sheet.getRange(entryRow(note.date) + note.index, noteColumn()).setValue(note.text);
+    });
+  }
+
   /** Setup the sheet and copy the range of entries from the data sheet. */
   export function setup(fDate: Date, tDate: Date): void {
     sheet.clear();
@@ -204,6 +228,7 @@ namespace ScheduleSheet {
     sheet.getRangeList(["A1", "C1"]).setFontWeight("bold").setHorizontalAlignment("right");
     sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
     setupEmployeeSection();
+    setupNoteSection();
     // make sure columns on the right are sized properly
     Locations.all().forEach((loc, ndx) => {
       const col = FIRST_ENTRY_COLUMN + ndx * (COLUMNS_PER_ENTRY + 1);
@@ -295,11 +320,12 @@ namespace ScheduleSheet {
     // also added a check for the active selection.
     // if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
     const activeRange = sheet.getActiveRange();
-    if (SheetUtils.isCell(activeRange) && SheetUtils.isCell(e.range)) {
+    if (!SheetUtils.isCell(activeRange) || !SheetUtils.isCell(e.range)) {
       const range = dateRange();
       const entriesOnSchedule = Prelude.forEachAsList(forEachEntry);
       DataSheet.replaceRange(range.from, range.until, entriesOnSchedule);
       // TODO: redraw everything in this case?
+      // TODO: Deal with notes section
       return;
     }
     // Otherwise do the one cell fast path:
@@ -316,6 +342,15 @@ namespace ScheduleSheet {
       // And also redraw that one cell
       // e.range.setRichTextValue(layoutEntryGroup(entries));
       // sheet.getRange(e.range.getRow(), e.range.getColumn()).setValue("TEST");
+    } else if (e.range.getColumn() === noteColumn()) {
+      const date = rowToDate(e.range.getRow());
+      if (!date) {
+        /// notes outside the date column are ignored
+        return;
+      }
+      const firstRowOfDate = entryRow(date);
+      const ndx = e.range.getRow() - firstRowOfDate;
+      NoteSheet.addOrReplace({ date, index: ndx, text: e.value});
     }
   }
 }

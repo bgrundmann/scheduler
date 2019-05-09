@@ -3,8 +3,6 @@
 //   - Write something to print
 //   - Write something to calendarize
 //   - Add config page with list of employees and their powers
-//   - Write alternative views
-//     - A view that shows several weeks at once and only the number of employees per office
 //   - Figure out how to deploy this properly
 //     Core idea: deploy as sheet with bound script (but develop using typescript and clasp)
 //     Deploy by making named copies of the sheet.
@@ -12,7 +10,14 @@
 //   - Write something to make shifts that are not in the doodle bold
 //   - Split Daten into Focus and History
 //   - Use regular coloring instead of conditional formatting on the schedule sheet for weekends
-//   - Fix bug in placement from doodle -> schedule
+//   - Add column to show special dates (maybe by subscribing to a calendar?)
+//   - Resize columns after doodle -> schedule
+//   - more clever doodle -> schedule rules
+//   - doodle box?
+//   - Samstags sind nur 6 stunden
+//     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
+//   - Wie sollten man schulungen verrechnen?
+//   - Handle probleme mit onEdit and undefined in e.range.value...
 namespace Main {
   /*
   function diffScheduleAndData() {
