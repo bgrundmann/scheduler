@@ -25,12 +25,12 @@ namespace Main {
   export function onOpenCallback() {
     Logger.clear();
     // Make sure whatever was left on the schedule page last time is saved into the data sheet
-    // saveEntriesFromScheduleToData();
+    saveEntriesFromScheduleToData();
     // Now that is done reset the data sheet
-    const d1 = new Date("2019-04-11");
-    const d2 = new Date("2019-05-22");
-    ScheduleSheet.setup(d1, d2);
-    OverviewSheet.setup(d1, d2);
+    // const d1 = new Date("2019-04-11");
+    // const d2 = new Date("2019-05-22");
+    // ScheduleSheet.setup(d1, d2);
+    // OverviewSheet.setup(d1, d2);
   }
   export function changeDates() {
     const ui = SpreadsheetApp.getUi();

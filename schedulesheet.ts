@@ -186,7 +186,7 @@ namespace ScheduleSheet {
   }
 
   // Setup the sheet and copy the range of entries from the data sheet
-  export function setup(fDate: Date, tDate: Date) {
+  export function setup(fDate: Date, tDate: Date): void {
     sheet.clear();
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(1);

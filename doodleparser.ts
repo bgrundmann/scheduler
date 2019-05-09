@@ -113,11 +113,9 @@ namespace DoodleParser {
   }
 
   export function parse() {
-    Logger.clear();
     const ss = SpreadsheetApp.getActive();
     const doodle = ss.getSheetByName("Umfrage");
     const employeeDict = EmployeeSheet.byAliasAndHandle();
-    Logger.log(employeeDict);
     const monthAndYears = parseMergedRow(doodle, 4, 2, doodle.getLastColumn());
     const days = parseMergedRow(doodle, 5, 2, doodle.getLastColumn());
     const times = parseMergedRow(doodle, 6, 2, doodle.getLastColumn());
@@ -128,8 +126,11 @@ namespace DoodleParser {
       // NOTE: forEachShift column is absolute column on sheet (with 1 being A)
       // But values array is 0 based
       for (const row of values) {
-          const parsedName = String(row[0]);
+          const parsedName = row[0].toString();
           // FIXME: Error handling here
+          if (!(parsedName in employeeDict)) {
+            throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
+          }
           const name = employeeDict[parsedName].employee;
           const ok = row[c - 1] === "OK";
           if (ok) {
