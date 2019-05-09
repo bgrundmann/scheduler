@@ -234,7 +234,7 @@ namespace ScheduleSheet {
     // const rule=SpreadsheetApp.newDataValidation().requireFormulaSatisfied("=IS_VALID_SCHEDULE_ENTRY")
   }
 
-  // Call f for each entry on the schedule sheet
+  /** Calls f for each entry on the schedule sheet. */
   export function forEachEntry(f: (schedule: Entry.IEntry) => void): void {
     const data = getEntriesRange().getValues();
     forEachDayOnSheet((date) => {
@@ -261,7 +261,9 @@ namespace ScheduleSheet {
     });
   }
 
-  // Get employees and locations to schedule as dictionary (from the left pane)
+  /** Get employees and locations to schedule as dictionary (from the left pane).
+   * Returns only those employees who should be placed.
+   */
   export function employeesAndLocations() {
     const employeeCount = EmployeeSheet.all().length;
     const data = sheet.getRange(FIRST_ENTRY_ROW, 1, employeeCount, 3)
@@ -274,7 +276,7 @@ namespace ScheduleSheet {
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
 
-  /// Called on edit of a cell
+  /** Called on edit of a cell. */
   export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
     // check if range is bigger than one cell and if so just recreate the
     // range of the data sheet that is on the schedule.  That is we only

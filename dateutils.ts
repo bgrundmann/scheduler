@@ -37,8 +37,11 @@ namespace DateUtils {
     const ut = truncToDay(upp);
     return lt.getTime() <= dt.getTime() && dt.getTime() <= ut.getTime();
   }
+  /** Compare the passed in Date objects as Dates (independently of timezone
+   * and ignoring anything with finer granularity than a day).
+   */
   export function equal(d1: Date, d2: Date): boolean {
-    return d1.getTime() === d2.getTime();
+    return truncToDay(d1).getTime() === truncToDay(d2).getTime();
   }
   export function forEachDay(lower: Date, upper: Date, f: (d: Date) => void): void {
     let d = lower;

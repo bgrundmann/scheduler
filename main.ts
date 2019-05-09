@@ -14,6 +14,24 @@
 //   - Use regular coloring instead of conditional formatting on the schedule sheet for weekends
 //   - Fix bug in placement from doodle -> schedule
 namespace Main {
+  /*
+  function diffScheduleAndData() {
+    const schedule = Prelude.forEachAsList(ScheduleSheet.forEachEntry);
+    const data = Prelude.forEachAsList(DataSheet.forEachEntry);
+    let onlyInSchedule = [];
+    let onlyInData = [];
+    let differs = [];
+    let s = 0;
+    let d = 0;
+    while (s < schedule.length && d < data.length) {
+      const se = schedule[s];
+      const de = data[d];
+      if (DateUtils.equal(se.date, de.date) &&
+        se.employee === de.employee &&
+        se.location.name === de.location.name)
+    }
+  }
+  */
   export function saveEntriesFromScheduleToData() {
     const range = ScheduleSheet.dateRange();
     const existing: Entry.IEntry[] = [];
