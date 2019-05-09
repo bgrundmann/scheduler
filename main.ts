@@ -12,6 +12,7 @@
 //   - Write something to make shifts that are not in the doodle bold
 //   - Split Daten into Focus and History
 //   - Use regular coloring instead of conditional formatting on the schedule sheet for weekends
+//   - Fix bug in placement from doodle -> schedule
 namespace Main {
   export function saveEntriesFromScheduleToData() {
     const range = ScheduleSheet.dateRange();
@@ -47,7 +48,7 @@ namespace Main {
     const range = ScheduleSheet.dateRange();
     const whoAndWhere = ScheduleSheet.employeesAndLocations();
     const entriesToPlace = Prelude.forEachAsList(PollSheet.forEachUnique, (p) => {
-      return whoAndWhere[p.employee] && range.from <= p.date && p.date <= range.until;
+      return whoAndWhere[p.employee] && DateUtils.inRangeInclusive(p.date, range.from, range.until);
     });
     const entries = entriesToPlace.map((ps) => {
       return {

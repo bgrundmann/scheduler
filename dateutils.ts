@@ -25,8 +25,14 @@ namespace DateUtils {
       return w - 1;
     }
   }
-  export function inRangeInclusive<T extends number|Date>(d: T, low: T, upp: T): boolean {
-    return low <= d && d <= upp;
+  export function inRangeInclusive<T>(d: T, low: T, upp: T): boolean {
+    if (typeof d === "number") {
+      return low <= d && d <= upp;
+    } else if (d instanceof Date && low instanceof Date && upp instanceof Date) {
+      return low.getTime() <= d.getTime() && d.getTime() <= upp.getTime();
+    }
+    // never happens just to make compiler happy
+    return false;
   }
   export function equal(d1: Date, d2: Date): boolean {
     return d1.getTime() === d2.getTime();
