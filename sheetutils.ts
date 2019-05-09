@@ -59,4 +59,23 @@ namespace SheetUtils {
   export function isCell(r: GoogleAppsScript.Spreadsheet.Range): boolean {
     return r.getNumColumns() === 1 && r.getNumRows() === 1;
   }
+
+  /** Prompt user for a date.  Returns undefined if user pressed cancel. */
+  export function askForDate(prompt: string): Date|undefined {
+    const ui = SpreadsheetApp.getUi();
+    while (true) {
+      const result = ui.prompt(prompt, ui.ButtonSet.OK_CANCEL);
+      const button = result.getSelectedButton();
+      if (button === ui.Button.OK) {
+        const res = DateUtils.parseISODate(result.getResponseText());
+        if (res) {
+          return res;
+        } else {
+          ui.alert("Habe deine Eingabe nicht verstanden.  Bitte YYYY-MM-DD (zBsp 1981-07-14)");
+        }
+      } else if (button === ui.Button.CANCEL || button === ui.Button.CLOSE) {
+        return undefined;
+      }
+    }
+  }
 }

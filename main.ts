@@ -33,28 +33,17 @@ namespace Main {
     // OverviewSheet.setup(d1, d2);
   }
   export function changeDates() {
-    const ui = SpreadsheetApp.getUi();
-    const result = ui.prompt("Monat oder datum", ui.ButtonSet.OK_CANCEL);
-    const button = result.getSelectedButton();
-    if (button === ui.Button.OK) {
-      const dates = DateUtils.parseHumanDateRangeInput(result.getResponseText());
-      if (dates !== null) {
-        // Make sure what is currently on the schedule page is saved first
-        saveEntriesFromScheduleToData();
-        ScheduleSheet.setup(dates.from, dates.until);
-        OverviewSheet.setup(dates.from, dates.until);
-      } else {
-        ui.alert("Habe deine Eingabe nicht verstanden.  Bitte YYYY-MM (zBsp 2019-11)");
-      }
-    } else if (button === ui.Button.CANCEL || button === ui.Button.CLOSE) {
-      // do nothing
-    }
+    const fromDate = SheetUtils.askForDate("Von");
+    if (!fromDate) { return; }
+    const untilDate = SheetUtils.askForDate("Bis");
+    if (!untilDate) { return; }
+    ScheduleSheet.setup(fromDate, untilDate);
+    OverviewSheet.setup(fromDate, untilDate);
   }
   export function parseDoodle() {
     DoodleParser.parse();
   }
   export function employeesFromDoodleToSchedule() {
-    saveEntriesFromScheduleToData();
     const range = ScheduleSheet.dateRange();
     const whoAndWhere = ScheduleSheet.employeesAndLocations();
     const entriesToPlace = Prelude.forEachAsList(PollSheet.forEachUnique, (p) => {
@@ -73,7 +62,6 @@ namespace Main {
     ScheduleSheet.setup(range.from, range.until);
   }
   export function backup() {
-    saveEntriesFromScheduleToData();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     SheetUtils.deleteSheetByNameIfExists("Backup");
     const sheet = ss.getSheetByName("Daten").copyTo(ss);
