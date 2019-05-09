@@ -62,7 +62,7 @@ namespace ScheduleSheet {
     const locNdx = Math.floor((column - FIRST_ENTRY_COLUMN) / 3);
     const vpart = (row - FIRST_ENTRY_ROW) % 2;
     const hpart = (column - FIRST_ENTRY_COLUMN) % 3;
-    if (!DateUtils.inRangeInclusive(locNdx, 0, locations.length - 1)) {
+    if (!Prelude.inRangeInclusive(locNdx, 0, locations.length - 1)) {
       return undefined;
     }
     // are we on the empty columns between location columns?
@@ -165,7 +165,7 @@ namespace ScheduleSheet {
     return ["=" + wholeDay + "+" + firstHalf, "=" + wholeDay + "+" + secondHalf];
   }
 
-  // setup the part of the sheet on the left that lists employees and how much they work
+  /** setup the part of the sheet on the left that lists employees and how much they work. */
   function setupEmployeeSection(): void {
     const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
     sheet.getRange(FIRST_ENTRY_ROW - 1, 1, 1, 3).setValues([["Mitarbeiter", "Stunden", ""]]).setFontWeight("bold");
@@ -185,7 +185,7 @@ namespace ScheduleSheet {
     sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
   }
 
-  // Setup the sheet and copy the range of entries from the data sheet
+  /** Setup the sheet and copy the range of entries from the data sheet. */
   export function setup(fDate: Date, tDate: Date): void {
     sheet.clear();
     sheet.setHiddenGridlines(true);

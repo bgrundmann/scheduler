@@ -18,6 +18,10 @@ namespace Prelude {
     });
   }
 
+  export function inRangeInclusive(n: number, low: number, upp: number): boolean {
+    return low <= n && n <= upp;
+  }
+
   export function forEachAsList<T>(forEach: (f: (x: T) => void) => void, optFilter?: (x: T) => boolean): T[] {
     const res: T[] = [];
     const filter = optFilter || ((x) => true );

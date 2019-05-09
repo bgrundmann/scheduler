@@ -25,14 +25,17 @@ namespace DateUtils {
       return w - 1;
     }
   }
-  export function inRangeInclusive<T>(d: T, low: T, upp: T): boolean {
-    if (typeof d === "number") {
-      return low <= d && d <= upp;
-    } else if (d instanceof Date && low instanceof Date && upp instanceof Date) {
-      return low.getTime() <= d.getTime() && d.getTime() <= upp.getTime();
-    }
-    // never happens just to make compiler happy
-    return false;
+  function truncToDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  /** Compare the passed in Date objects as Dates (independently of timezone and
+   * ignoring anything with finer granularity than a day).
+   */
+  export function inRangeInclusive(d: Date, low: Date, upp: Date): boolean {
+    const dt = truncToDay(d);
+    const lt = truncToDay(low);
+    const ut = truncToDay(upp);
+    return lt.getTime() <= dt.getTime() && dt.getTime() <= ut.getTime();
   }
   export function equal(d1: Date, d2: Date): boolean {
     return d1.getTime() === d2.getTime();

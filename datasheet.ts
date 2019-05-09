@@ -65,7 +65,6 @@ namespace DataSheet {
     const existingOutsideRange: Entry.IEntry[] = [];
     forEachEntry((e) => {
       if (!(DateUtils.inRangeInclusive(e.date, fromDate, toDate))) {
-        Logger.log("%s <= %s <= %s", fromDate, e.date, toDate);
         existingOutsideRange.push(e);
       }
     });
