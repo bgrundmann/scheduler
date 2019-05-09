@@ -237,17 +237,17 @@ namespace ScheduleSheet {
   // Call f for each entry on the schedule sheet
   export function forEachEntry(f: (schedule: Entry.IEntry) => void): void {
     const data = getEntriesRange().getValues();
-    Locations.all().forEach ((loc) => {
-      forEachDayOnSheet((date) => {
+    forEachDayOnSheet((date) => {
+      Locations.all().forEach((loc) => {
         const row = entryRow(date) - FIRST_ENTRY_ROW;
         const col = entryColumn(date, loc) - FIRST_ENTRY_COLUMN;
         const whole = splitNames(Values.get(data, row, col, Values.asString));
         const firstHalf = splitNames(Values.get(data, row + 1, col, Values.asString));
         const secondHalf = splitNames(Values.get(data, row + 1, col + 1, Values.asString));
         const all =
-            [ { shift : Shifts.whole, names : whole },
-             { shift : Shifts.firstHalf, names : firstHalf },
-             { shift : Shifts.secondHalf, names : secondHalf },
+            [ { shift : Shifts.firstHalf, names : firstHalf },
+              { shift : Shifts.secondHalf, names : secondHalf },
+              { shift: Shifts.whole, names: whole },
             ] ;
         all.forEach((a) => {
           a.names.forEach((employee) => {

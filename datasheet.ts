@@ -26,7 +26,7 @@ namespace DataSheet {
         // location
         { column: 3, ascending: true },
         // shift
-        { column: 4, ascending: true },
+        { column: 4, ascending: false },
         // employee
         { column: 2, ascending: true },
        ]);

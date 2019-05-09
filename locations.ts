@@ -4,10 +4,10 @@ namespace Locations {
     ndx: number;
   }
   const theList: ILocation[] = [
-    { name : "Marktgasse"},
     { name : "Ammergasse" },
     { name : "Buero" },
-    { name : "Extras" },
+    { name : "Marktgasse"},
+    { name : "Xtras" },
   ].map ((l, ndx) => ({ ...l, ndx }) );
 
   let byNameCache: ((name: string) => ILocation|undefined)|undefined;
