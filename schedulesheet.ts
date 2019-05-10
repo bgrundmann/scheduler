@@ -203,17 +203,43 @@ namespace ScheduleSheet {
     sheet.getRange(FIRST_ENTRY_ROW, 3, locs.length, 1).setValues(locs.map((l) => [""]));
   }
 
-  function setupNoteSection() {
-    const dr = dateRange();
-    const col = noteColumn();
-    sheet.getRange(FIRST_ENTRY_ROW, col, ROWS_PER_ENTRY * (DateUtils.daysBetween(dr.from, dr.until) + 1), 1)
-    .setBackgroundRGB(255, 255, 153);
-    sheet.getRange(FIRST_ENTRY_ROW - 1, col).setValue("Notizen").setFontWeight("bold");
-    sheet.autoResizeColumn(col);
-    // TODO: if Andi starts using notes a lot switch to single setValues call
-    NoteSheet.forEachEntryInRange(dr.from, dr.until, (note) => {
-      sheet.getRange(entryRow(note.date) + note.index, noteColumn()).setValue(note.text);
-    });
+  namespace NoteSection {
+    function noteRange(): GoogleAppsScript.Spreadsheet.Range {
+      const dr = dateRange();
+      return sheet.getRange(FIRST_ENTRY_ROW, noteColumn(),
+        ROWS_PER_ENTRY * (DateUtils.daysBetween(dr.from, dr.until) + 1), 1);
+    }
+
+    export function setup() {
+      const dr = dateRange();
+      const col = noteColumn();
+      noteRange().setBackgroundRGB(255, 255, 153);
+      sheet.getRange(1, col).setValue("Notizen").setFontWeight("bold");
+      // if Andi starts using notes a lot switch to a single setValues call instead of this loop
+      NoteSheet.forEachEntryInRange(dr.from, dr.until, (note) => {
+        sheet.getRange(entryRow(note.date) + note.index, noteColumn()).setValue(note.text);
+      });
+      sheet.autoResizeColumn(col);
+    }
+
+    /** Call f foreach note. */
+    export function forEach(f: (note: NoteSheet.Note) => void): void {
+      const data = noteRange().getValues();
+      data.forEach((row, n) => {
+        const date = rowToDate(FIRST_ENTRY_ROW + n)!;
+        const firstRowOfDate = entryRow(date);
+        const index = FIRST_ENTRY_ROW + n - firstRowOfDate;
+        if (row[0] !== "" && row[0] !== undefined) {
+          f({ date, index, text: Values.asString(row[0]) });
+        }
+      });
+    }
+
+    export function save() {
+      const notes = Prelude.forEachAsList(forEach);
+      const dr = dateRange();
+      NoteSheet.replaceRange(dr.from, dr.until, notes);
+    }
   }
 
   /** Setup the sheet and copy the range of entries from the data sheet. */
@@ -228,16 +254,7 @@ namespace ScheduleSheet {
     sheet.getRangeList(["A1", "C1"]).setFontWeight("bold").setHorizontalAlignment("right");
     sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
     setupEmployeeSection();
-    setupNoteSection();
-    // make sure columns on the right are sized properly
-    Locations.all().forEach((loc, ndx) => {
-      const col = FIRST_ENTRY_COLUMN + ndx * (COLUMNS_PER_ENTRY + 1);
-      sheet.getRange(1, col).setValue(loc.name).setFontWeight("bold");
-      sheet.setColumnWidth(col - 1, 10);
-      sheet.setColumnWidth(col, 100);
-      sheet.setColumnWidth(col + 1, 100);
-    });
-
+    NoteSection.setup();
     // write the column of dates, draw the boxes and setup the formula for #people per entry
     forEachDayOnSheet((date) => {
       const row = entryRow(date);
@@ -262,7 +279,13 @@ namespace ScheduleSheet {
     });
     sheet.autoResizeColumn(INDEX_COLUMN);
     placeEntries();
-    sheet.getRange("B1").activate();
+    // make sure columns on the right are sized properly
+    Locations.all().forEach((loc, ndx) => {
+      const col = FIRST_ENTRY_COLUMN + ndx * (COLUMNS_PER_ENTRY + 1);
+      sheet.getRange(1, col).setValue(loc.name).setFontWeight("bold");
+      sheet.setColumnWidth(col - 1, 10);
+      SheetUtils.autoResizeColumns(sheet, col, 2, 80);
+    });
     // TODO: make validation call is_valid_schedule_entry
     // const rule=SpreadsheetApp.newDataValidation().requireFormulaSatisfied("=IS_VALID_SCHEDULE_ENTRY")
   }
@@ -309,48 +332,53 @@ namespace ScheduleSheet {
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
 
-  /** Called on edit of a cell. */
+  /** Called on edit of a cell. The cell(s) are already changed. */
   export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
-    // check if range is bigger than one cell and if so just recreate the
-    // range of the data sheet that is on the schedule.  That is we only
-    // try to do minimal work when only single cell was changed.
-    // Annoyingly the below turned out not to work (contrary to the docs)
-    // as even when I had selected multiple cells NumRows and NumColumns was
-    // always 1.  So I get that check (in case this ever gets fixed) but
-    // also added a check for the active selection.
-    // if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
-    const activeRange = sheet.getActiveRange();
-    if (!SheetUtils.isCell(activeRange) || !SheetUtils.isCell(e.range)) {
-      const range = dateRange();
-      const entriesOnSchedule = Prelude.forEachAsList(forEachEntry);
-      DataSheet.replaceRange(range.from, range.until, entriesOnSchedule);
-      // TODO: redraw everything in this case?
-      // TODO: Deal with notes section
-      return;
-    }
-    // Otherwise do the one cell fast path:
-    // figure out which entry was changed, if any
-    const entry = cellToEntry(e.range.getRow(), e.range.getColumn());
-    // Change wasn't of a entry cell so we are good.
-    if (entry !== undefined) {
-      // remove any relevant existing entries in the datasheet
-      DataSheet.removeMatching(entry.date, entry.location.name, entry.shift.name);
-      // and create new ones.
-      const employees = splitNames(e.value);
-      const entries = employees.map((name: string) => ({ employee: name, ...entry }));
-      DataSheet.add(entries);
-      // And also redraw that one cell
-      // e.range.setRichTextValue(layoutEntryGroup(entries));
-      // sheet.getRange(e.range.getRow(), e.range.getColumn()).setValue("TEST");
-    } else if (e.range.getColumn() === noteColumn()) {
-      const date = rowToDate(e.range.getRow());
-      if (!date) {
-        /// notes outside the date column are ignored
-        return;
-      }
-      const firstRowOfDate = entryRow(date);
-      const ndx = e.range.getRow() - firstRowOfDate;
-      NoteSheet.addOrReplace({ date, index: ndx, text: e.value});
+    const ev = SheetUtils.onEditEvent(e);
+    switch (ev.kind) {
+      case "mass-change":
+        const range = dateRange();
+        const entriesOnSchedule = Prelude.forEachAsList(forEachEntry);
+        DataSheet.replaceRange(range.from, range.until, entriesOnSchedule);
+        NoteSection.save();
+        break;
+
+      case "change":
+      case "insert":
+      case "clear":
+        // Otherwise do the one cell fast path:
+        // figure out which entry was changed, if any
+        const entry = cellToEntry(e.range.getRow(), e.range.getColumn());
+        // Change wasn't of a entry cell so we are good.
+        if (entry !== undefined) {
+          // remove any relevant existing entries in the datasheet
+          DataSheet.removeMatching(entry.date, entry.location.name, entry.shift.name);
+          // and create new ones.
+          const employees = splitNames(e.value);
+          const entries = employees.map((name: string) => ({ employee: name, ...entry }));
+          DataSheet.add(entries);
+          // And also redraw that one cell
+          // e.range.setRichTextValue(layoutEntryGroup(entries));
+          // sheet.getRange(e.range.getRow(), e.range.getColumn()).setValue("TEST");
+        } else if (e.range.getColumn() === noteColumn()) {
+          const date = rowToDate(e.range.getRow());
+          if (!date) {
+            /// notes outside the date column are ignored
+            return;
+          }
+          const firstRowOfDate = entryRow(date);
+          const ndx = e.range.getRow() - firstRowOfDate;
+          switch (ev.kind) {
+            case "clear":
+              NoteSheet.deleteMatching(date, ndx);
+              break;
+            case "change":
+            case  "insert":
+              NoteSheet.addOrReplace({ date, index: ndx, text: e.value });
+              break;
+          }
+        }
+        break;
     }
   }
 }

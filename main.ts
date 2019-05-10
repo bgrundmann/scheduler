@@ -9,15 +9,13 @@
 //     Debug by making backups and exporting that sheet
 //   - Write something to make shifts that are not in the doodle bold
 //   - Split Daten into Focus and History
-//   - Use regular coloring instead of conditional formatting on the schedule sheet for weekends
 //   - Add column to show special dates (maybe by subscribing to a calendar?)
-//   - Resize columns after doodle -> schedule
+//   - Make cells that are completely empty red
 //   - more clever doodle -> schedule rules
 //   - doodle box?
 //   - Samstags sind nur 6 stunden
 //     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
 //   - Wie sollten man schulungen verrechnen?
-//   - Handle probleme mit onEdit and undefined in e.range.value...
 namespace Main {
   /*
   function diffScheduleAndData() {
@@ -86,26 +84,19 @@ namespace Main {
     ScheduleSheet.setup(range.from, range.until);
   }
   export function backup() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    SheetUtils.deleteSheetByNameIfExists("Backup");
-    const sheet = ss.getSheetByName("Daten").copyTo(ss);
-    sheet.setName("Backup");
+    SheetUtils.backupSheet("Daten", "Backup");
+    SheetUtils.backupSheet("Notizen", "Backup-Notizen");
   }
   export function restore() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const backupSheet = ss.getSheetByName("Backup");
-    if (!backupSheet) {
+    SheetUtils.restoreSheet("Backup-Notizen", "Notizen");
+    if (!SheetUtils.restoreSheet("Backup", "Daten")) {
       const ui = SpreadsheetApp.getUi();
       ui.alert("Kein Backup vorhanden!");
     }
-    const daten = ss.getSheetByName("Daten");
-    daten.clear();
-    backupSheet.getDataRange().copyTo(daten.getRange(1, 1));
     const r = ScheduleSheet.dateRange();
     ScheduleSheet.setup(r.from, r.until);
   }
   export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
-    Logger.log("onEditCallback %s", e);
     switch (e.range.getSheet().getName()) {
       case ScheduleSheet.NAME:
         ScheduleSheet.onEditCallback(e);

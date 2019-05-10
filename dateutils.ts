@@ -43,6 +43,20 @@ namespace DateUtils {
   export function equal(d1: Date, d2: Date): boolean {
     return truncToDay(d1).getTime() === truncToDay(d2).getTime();
   }
+  /** Compare the passed in date objects as Dates (independently of timezone
+   * and ignoring anything with finer granularity than a day).
+   */
+  export function compare(a: Date, b: Date): Prelude.Ordering {
+    const at = truncToDay(a);
+    const bt = truncToDay(b);
+    if (at < bt) {
+      return "lt";
+    } else if (at > bt) {
+      return "gt";
+    } else {
+      return "eq";
+    }
+  }
   export function forEachDay(lower: Date, upper: Date, f: (d: Date) => void): void {
     let d = lower;
     while (d <= upper) {

@@ -1,5 +1,45 @@
 /** @OnlyCurrentDoc */
 namespace SheetUtils {
+  /** A decoded version of the onEdit event:
+   * OnEditInsert means the cell was previously empty
+   * OnEditChange means the cell was not empty
+   * OnEditDelete means the cell is now empty
+   */
+  export interface OnEditInsert {
+    kind: "insert";
+    value: any;
+  }
+
+  export interface OnEditChange {
+    kind: "change";
+    value: any;
+    oldValue: any;
+  }
+
+  export interface OnEditClear {
+    kind: "clear";
+    oldValue: any;
+  }
+
+  export interface OnEditMassChange {
+    kind: "mass-change";
+  }
+
+  export type OnEditEvent = OnEditInsert | OnEditChange | OnEditClear | OnEditMassChange;
+
+  /** Turn a google sheet onEdit Event into a typed event. */
+  export function onEditEvent(event: GoogleAppsScript.Events.SheetsOnEdit): OnEditEvent {
+    if (event.oldValue === undefined && event.value === undefined) {
+      return { kind: "mass-change" };
+    } else if (event.oldValue === undefined && event.value !== undefined) {
+      return { kind: "insert", value: event.value };
+    } else if (event.oldValue !== undefined && event.value.oldValue !== undefined) {
+      return { kind: "clear", oldValue: event.oldValue };
+    } else {
+      return { kind: "change", oldValue: event.oldValue, value: event.value };
+    }
+  }
+
   export function createOrClearSheetByName(name: string): GoogleAppsScript.Spreadsheet.Sheet {
     const ss = SpreadsheetApp.getActive(); const sheet = ss.getSheetByName(name);
     if (sheet === null) {
@@ -84,6 +124,41 @@ namespace SheetUtils {
         }
       } else if (button === ui.Button.CANCEL || button === ui.Button.CLOSE) {
         return undefined;
+      }
+    }
+  }
+
+  /** Create a copy of the sheet named sourceName called backupName.  If a sheet of such
+   * a name already exists it's content is replaced.
+   */
+  export function backupSheet(sourceName: string, backupName: string): void {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    SheetUtils.deleteSheetByNameIfExists(backupName);
+    const sheet = ss.getSheetByName(sourceName).copyTo(ss);
+    sheet.setName(backupName);
+  }
+
+  /** Restore a backup of a sheet as created by backupSheet, to the sheet called
+   * dstName.  Returns false if there is no backup of the given name.
+   */
+  export function restoreSheet(backupName: string, dstName: string): boolean {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const backupSheet = ss.getSheetByName(backupName);
+    if (!backupSheet) { return false; }
+    const dst = ss.getSheetByName(dstName);
+    dst.clear();
+    backupSheet.getDataRange().copyTo(dst.getRange(1, 1));
+    return true;
+  }
+
+  export function autoResizeColumns(sheet: GoogleAppsScript.Spreadsheet.Sheet,
+                                    startColumn: number, numColumns: number, minWidthPixels?: number) {
+    sheet.autoResizeColumns(startColumn, numColumns);
+    if (minWidthPixels) {
+      for (let c = startColumn; c < startColumn + numColumns; c++) {
+        if (sheet.getColumnWidth(c) < minWidthPixels) {
+          sheet.setColumnWidth(c, minWidthPixels);
+        }
       }
     }
   }

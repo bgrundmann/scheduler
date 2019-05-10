@@ -11,6 +11,19 @@ namespace Prelude {
     name: string;
   }
 
+  export type Ordering = "lt" | "eq" | "gt";
+
+  export function findIndex<T>(length: number,
+                               get: (index: number) => T,
+                               predicate: (elem: T) => boolean, start?: number): number|undefined {
+    for (let i = start || 0; i < length; i++) {
+      if (predicate(get(i))) {
+        return i;
+      }
+    }
+    return undefined;
+  }
+
   export function makeFindByName<T extends IHasName>(l: T[]): ((name: string) => T | undefined) {
     const d = makeDictionary(l, (e) => e.name );
     return ((name) => {
