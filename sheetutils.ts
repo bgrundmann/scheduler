@@ -49,6 +49,9 @@ namespace SheetUtils {
     }
     return sheet;
   }
+  /** Same as getDataRange but excludes the header.  Returns undefined if the resulting
+   * range would be empty.
+   */
   export function getDataRangeWithoutHeader(sheet: GoogleAppsScript.Spreadsheet.Sheet):
     GoogleAppsScript.Spreadsheet.Range | undefined {
     const allData = sheet.getDataRange();

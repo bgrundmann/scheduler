@@ -13,6 +13,45 @@ namespace Prelude {
 
   export type Ordering = "lt" | "eq" | "gt";
 
+  export type Comparator<T> = (a: T, b: T) => Ordering;
+
+  export function compareBy<T, A>(get: (t: T) => A, comparator: Comparator<A>): Comparator<T> {
+    return (t1: T, t2: T) => comparator(get(t1), get(t2));
+  }
+
+  export function lexiographic<T>(comparators: Array<Comparator<T>>): Comparator<T> {
+    return (t1: T, t2: T) => {
+      for (const compareField of comparators) {
+        switch (compareField(t1, t2)) {
+          case "lt": return "lt";
+          case "gt": return "gt";
+          case "eq": break;
+        }
+      }
+      return "eq";
+    };
+  }
+
+  export function stringCompare(a: string, b: string): Ordering {
+    if (a < b) {
+      return "lt";
+    } else if (a > b) {
+      return "gt";
+    } else {
+      return "eq";
+    }
+  }
+
+  export function numberCompare(a: number, b: number): Ordering {
+    if (a < b) {
+      return "lt";
+    } else if (a > b) {
+      return "gt";
+    } else {
+      return "eq";
+    }
+  }
+
   export function findIndex<T>(length: number,
                                get: (index: number) => T,
                                predicate: (elem: T) => boolean, start?: number): number|undefined {
@@ -47,6 +86,11 @@ namespace Prelude {
       return x;
     }
     throw new Error("Failed to unwrap");
+  }
+
+  export function flattenArray<T>(arrayOfArrays: T[][]): T[] {
+    const empty: T[] = [];
+    return empty.concat(...arrayOfArrays);
   }
 }
 

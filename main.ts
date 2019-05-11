@@ -71,11 +71,10 @@ namespace Main {
     const entriesToPlace = Prelude.forEachAsList(PollSheet.forEachUnique, (p) => {
       return whoAndWhere[p.employee] && DateUtils.inRangeInclusive(p.date, range.from, range.until);
     });
-    const entries = entriesToPlace.map((ps) => {
+    const entries: Entry.IEntry[] = entriesToPlace.map((ps) => {
       return {
-        employee : ps.employee,
+        employees : [ps.employee],
         date : ps.date,
-        // TODO: Handle error properly
         location : Prelude.unwrap(whoAndWhere[ps.employee].location),
         shift : ps.shift,
       };

@@ -1,4 +1,7 @@
 /** @OnlyCurrentDoc */
+/** The schedule sheet draws one box per place, each box being subdivided into 3 cells
+ * one for each of the standard slots.
+ */
 namespace ScheduleSheet {
   const INDEX_COLUMN = 5;
   const FIRST_ENTRY_COLUMN = 7;
@@ -35,17 +38,9 @@ namespace ScheduleSheet {
     });
   }
 
-  // return the top left row the entry on the given date
-  function entryRow(date: Date): number {
+  /** return the top row of the box for the given date */
+  function dateToRow(date: Date): number {
     return FIRST_ENTRY_ROW + DateUtils.daysBetween(dateRange().from, date) * ROWS_PER_ENTRY;
-  }
-
-  function entryColumn(date: Date, loc: Locations.ILocation): number {
-    return FIRST_ENTRY_COLUMN + loc.ndx * (COLUMNS_PER_ENTRY + 1);
-  }
-
-  function noteColumn(): number {
-    return FIRST_ENTRY_COLUMN + Locations.all().length * (COLUMNS_PER_ENTRY + 1) + 1;
   }
 
   /** Convert row number into date. */
@@ -61,8 +56,15 @@ namespace ScheduleSheet {
     return date;
   }
 
-  // TODO: Rename cellToEntry
-  function cellToEntry(row: number, column: number):
+  function placeToColumn({ date, location }: { date: Date; location: Locations.ILocation; }): number {
+    return FIRST_ENTRY_COLUMN + location.ndx * (COLUMNS_PER_ENTRY + 1);
+  }
+
+  function noteColumn(): number {
+    return FIRST_ENTRY_COLUMN + Locations.all().length * (COLUMNS_PER_ENTRY + 1) + 1;
+  }
+
+  function cellToSlot(row: number, column: number):
     { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
     if (column < FIRST_ENTRY_COLUMN) {
       return undefined;
@@ -89,7 +91,7 @@ namespace ScheduleSheet {
       shift = Shifts.whole;
     } else {
       // Do not know what is going on
-      Logger.log("cellToEntry bug? (row=%s) (column=%s)", row, column);
+      Logger.log("cellToSlot bug? (row=%s) (column=%s)", row, column);
       return undefined;
     }
     return { date, location: locations[locNdx], shift };
@@ -121,25 +123,31 @@ namespace ScheduleSheet {
   const normalStyle = SpreadsheetApp.newTextStyle().build();
   const errorStyle = SpreadsheetApp.newTextStyle().setForegroundColor("red").setBold(true).build();
 
-  // TODO: Need better name and type for EntryGroup
-  function layoutEntryGroup(entries: Entry.IEntry[]): GoogleAppsScript.Spreadsheet.RichTextValue {
+  function getEmployeeStatus(employee: string): "ok" | "not-in-poll" | "unknown-employee" {
+    const employees = EmployeeSheet.byAliasAndHandle();
+    const emp = employees[employee];
+    if (emp !== undefined && emp.employee === employee) {
+      // TODO: write check for poll status
+      return "ok";
+    } else {
+      return "unknown-employee";
+    }
+  }
+
+  function layoutEntry(entry: Entry.IEntry): GoogleAppsScript.Spreadsheet.RichTextValue {
     const elements =
-      entries.map((e: Entry.IEntry) => {
-        let style = normalStyle;
-        switch (e.employee) {
-          case undefined:
-            style = normalStyle;
-            break;
+      entry.employees.map((employee) => {
+        const text = employee;
+        switch (getEmployeeStatus(text)) {
+          case "ok":
+            return { text, style: normalStyle };
 
           case "not-in-poll":
-            style = boldStyle;
-            break;
+            return { text, style: boldStyle };
 
           case "unknown-employee":
-            style = errorStyle;
-            break;
+            return { text, style: errorStyle };
         }
-        return { text: e.employee, style };
       }).intersperse({ text: ", ", style: normalStyle });
     return SheetUtils.buildRichTexts(elements);
   }
@@ -149,15 +157,14 @@ namespace ScheduleSheet {
     const entryRange = getEntriesRange();
     const data = entryRange.getRichTextValues();
     // place entries from data sheet into schedule sheet
-    DataSheet.forEachEntryGrouped((entries: Entry.IEntry[]) => {
-      const first = entries[0];
-      if (DateUtils.inRangeInclusive(first.date, dateRange().from, dateRange().until)) {
-        let row = entryRow(first.date) - FIRST_ENTRY_ROW;
-        let col = entryColumn(first.date, first.location) - FIRST_ENTRY_COLUMN;
-        const offset = first.shift.entryDisplayOffset;
+    DataSheet.forEach((entry: Entry.IEntry) => {
+      if (DateUtils.inRangeInclusive(entry.date, dateRange().from, dateRange().until)) {
+        let row = dateToRow(entry.date) - FIRST_ENTRY_ROW;
+        let col = placeToColumn(entry) - FIRST_ENTRY_COLUMN;
+        const offset = entry.shift.entryDisplayOffset;
         row += offset[0];
         col += offset[1];
-        data[row][col] = layoutEntryGroup(entries);
+        data[row][col] = layoutEntry(entry);
       }
     });
     entryRange.setRichTextValues(data);
@@ -168,8 +175,8 @@ namespace ScheduleSheet {
       return "IF(ISBLANK(Schedule!" + cell + ");0;LEN(Schedule!" + cell +
         ")-LEN(SUBSTITUTE(Schedule!" + cell + ';",";""))+1)';
     }
-    const row = entryRow(date);
-    const col = entryColumn(date, loc);
+    const row = dateToRow(date);
+    const col = placeToColumn({ date, location: loc });
     const wholeDay = countFormula(SheetUtils.a1(row, col));
     const firstHalf = countFormula(SheetUtils.a1(row + 1, col));
     const secondHalf = countFormula(SheetUtils.a1(row + 1, col + 1));
@@ -217,7 +224,7 @@ namespace ScheduleSheet {
       sheet.getRange(1, col).setValue("Notizen").setFontWeight("bold");
       // if Andi starts using notes a lot switch to a single setValues call instead of this loop
       NoteSheet.forEachEntryInRange(dr.from, dr.until, (note) => {
-        sheet.getRange(entryRow(note.date) + note.index, noteColumn()).setValue(note.text);
+        sheet.getRange(dateToRow(note.date) + note.index, noteColumn()).setValue(note.text);
       });
       sheet.autoResizeColumn(col);
     }
@@ -227,7 +234,7 @@ namespace ScheduleSheet {
       const data = noteRange().getValues();
       data.forEach((row, n) => {
         const date = rowToDate(FIRST_ENTRY_ROW + n)!;
-        const firstRowOfDate = entryRow(date);
+        const firstRowOfDate = dateToRow(date);
         const index = FIRST_ENTRY_ROW + n - firstRowOfDate;
         if (row[0] !== "" && row[0] !== undefined) {
           f({ date, index, text: Values.asString(row[0]) });
@@ -257,14 +264,14 @@ namespace ScheduleSheet {
     NoteSection.setup();
     // write the column of dates, draw the boxes and setup the formula for #people per entry
     forEachDayOnSheet((date) => {
-      const row = entryRow(date);
+      const row = dateToRow(date);
       sheet.getRange(row, INDEX_COLUMN).setValue(date).setNumberFormat('ddd", "mmmm" "d');
       sheet.getRange(row, INDEX_COLUMN, 2, 1)
         .mergeVertically()
         .setBorder(true, true, true, true, false, false,  "#000000", SpreadsheetApp.BorderStyle.SOLID)
         .setVerticalAlignment("middle");
       Locations.all().forEach((loc) => {
-        const col = entryColumn(date, loc);
+        const col = placeToColumn({ date, location: loc });
 
         // TODO: fix d.ts file for range
         sheet.getRange(row, col, 1, 2).mergeAcross();
@@ -295,8 +302,8 @@ namespace ScheduleSheet {
     const data = getEntriesRange().getValues();
     forEachDayOnSheet((date) => {
       Locations.all().forEach((loc) => {
-        const row = entryRow(date) - FIRST_ENTRY_ROW;
-        const col = entryColumn(date, loc) - FIRST_ENTRY_COLUMN;
+        const row = dateToRow(date) - FIRST_ENTRY_ROW;
+        const col = placeToColumn({ date, location: loc }) - FIRST_ENTRY_COLUMN;
         const whole = splitNames(Values.get(data, row, col, Values.asString));
         const firstHalf = splitNames(Values.get(data, row + 1, col, Values.asString));
         const secondHalf = splitNames(Values.get(data, row + 1, col + 1, Values.asString));
@@ -305,17 +312,53 @@ namespace ScheduleSheet {
               { shift : Shifts.secondHalf, names : secondHalf },
               { shift: Shifts.whole, names: whole },
             ] ;
-        all.forEach((a) => {
-          a.names.forEach((employee) => {
-            const entry = {
-              date, employee, location : Locations.all()[loc.ndx], shift : a.shift,
-            };
-            f (entry);
-          });
+        all.forEach((e) => {
+          const entry: Entry.IEntry = {
+            date, employees: e.names, location: Locations.all()[loc.ndx], shift: e.shift,
+          };
+          f(entry);
         });
       });
     });
   }
+
+  const compareSlot =
+    Prelude.lexiographic ([
+      Prelude.compareBy((s: Entry.Slot) => s.date, DateUtils.compare),
+      Prelude.compareBy((s: Entry.Slot) => s.location.name, Prelude.stringCompare),
+      Prelude.compareBy((s: Entry.Slot) => s.shift.name, Prelude.stringCompare),
+    ]);
+
+  // /** Compare whats on the sheet with what's in the daten section.  Returns a list
+  //  * of all slots that don't match.
+  //  */
+  // function compareWithDataSheet(): Entry.Slot[] {
+  //   const result = [];
+  //   const dr = dateRange();
+  //   const data =
+  //     Prelude.forEachAsList(DataSheet.forEachEntry, ((e) => DateUtils.inRangeInclusive(e.date, dr.from, dr.until)));
+  //   const schedule =
+  //     Prelude.forEachAsList(forEachEntry);
+  //   let d = 0;
+  //   let s = 0;
+  //   function add(e: Entry.IEntry) {
+  //     // only add if that slot isn't already there
+  //     if (result.length > 0 && result[])
+  //   }
+  //   while (d < data.length && s < schedule.length) {
+  //     switch (compareSlot(data[d], schedule[s])) {
+  //       case "lt":
+  //         break;
+
+  //       case "gt":
+  //         break;
+
+  //       case "eq":
+
+  //         break;
+  //     }
+  //   }
+  // }
 
   /** Get employees and locations to schedule as dictionary (from the left pane).
    * Returns only those employees who should be placed.
@@ -332,8 +375,7 @@ namespace ScheduleSheet {
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
 
-  /** Called on edit of a cell. The cell(s) are already changed. */
-  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
+  function onEditCallbackLogic(e: GoogleAppsScript.Events.SheetsOnEdit): void {
     const ev = SheetUtils.onEditEvent(e);
     switch (ev.kind) {
       case "mass-change":
@@ -348,25 +390,24 @@ namespace ScheduleSheet {
       case "clear":
         // Otherwise do the one cell fast path:
         // figure out which entry was changed, if any
-        const entry = cellToEntry(e.range.getRow(), e.range.getColumn());
+        const slot = cellToSlot(e.range.getRow(), e.range.getColumn());
         // Change wasn't of a entry cell so we are good.
-        if (entry !== undefined) {
+        if (slot !== undefined) {
           // remove any relevant existing entries in the datasheet
-          DataSheet.removeMatching(entry.date, entry.location.name, entry.shift.name);
+          DataSheet.removeMatching(slot.date, slot.location.name, slot.shift.name);
           // and create new ones.
           const employees = splitNames(e.value);
-          const entries = employees.map((name: string) => ({ employee: name, ...entry }));
-          DataSheet.add(entries);
+          const entry = { ...slot, employees };
+          DataSheet.add([entry]);
           // And also redraw that one cell
-          // e.range.setRichTextValue(layoutEntryGroup(entries));
-          // sheet.getRange(e.range.getRow(), e.range.getColumn()).setValue("TEST");
+          e.range.setRichTextValue(layoutEntry(entry));
         } else if (e.range.getColumn() === noteColumn()) {
           const date = rowToDate(e.range.getRow());
           if (!date) {
             /// notes outside the date column are ignored
             return;
           }
-          const firstRowOfDate = entryRow(date);
+          const firstRowOfDate = dateToRow(date);
           const ndx = e.range.getRow() - firstRowOfDate;
           switch (ev.kind) {
             case "clear":
@@ -381,9 +422,22 @@ namespace ScheduleSheet {
         break;
     }
   }
-}
 
-/** @customfunction */
-function IS_VALID_SCHEDULE_ENTRY(cell: any) {
-  return typeof cell === "string" && ScheduleSheet.validateEntry(cell);
+  let insideOnEditCallback = false;
+
+  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+    if (!insideOnEditCallback) {
+      Logger.log("--> OnEditCallback");
+      insideOnEditCallback = true;
+      try {
+        onEditCallbackLogic(e);
+      } catch (error) {
+        // do nothing
+      }
+      insideOnEditCallback = false;
+      Logger.log("<-- OnEditCallback");
+    } else {
+      Logger.log("Recursive OnEditCallback -- not doing anything");
+    }
+  }
 }

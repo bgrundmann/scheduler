@@ -1,19 +1,28 @@
 /** @OnlyCurrentDoc */
 namespace DataSheet {
+  /// The data sheet stores entries in flattened fashion (aka one row per employee).
+  interface Line extends Entry.Slot {
+    employee: string;
+  }
+
   const spreadsheet = SpreadsheetApp.getActive();
   const sheet = spreadsheet.getSheetByName("Daten");
+
+  function entryToLines(e: Entry.IEntry): Line[] {
+    return e.employees.map((employee) => ({ ...e, employee }));
+  }
+
   export function clear(): void {
     if (sheet.getLastRow() > 1) {
       sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clear();
     }
   }
-  /// Add additional entries, keeps the worksheet sorted.
-  export function add(entries: Entry.IEntry[]): void {
-    const values = entries.map((e) => {
-      return [ e.date, e.employee, e.location.name, e.shift.name,
-        e.shift.start, e.shift.stop, e.shift.breakLength,
-        e.shift.stop - e.shift.start - e.shift.breakLength ];
-    });
+
+  function addLines(lines: Line[]): void {
+    const values = lines.map((l: Line) =>
+        [ l.date, l.employee, l.location.name, l.shift.name,
+          l.shift.start, l.shift.stop, l.shift.breakLength,
+          l.shift.stop - l.shift.start - l.shift.breakLength ]);
     if (values.length > 0) {
       sheet.getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
 
@@ -32,6 +41,14 @@ namespace DataSheet {
        ]);
     }
   }
+
+  /** Add additional entries, keeps the worksheet sorted.  Any existing entries on the same
+   * slot are merged as well as any in the input.
+   */
+  export function add(entries: Entry.IEntry[]): void {
+    addLines(Prelude.flattenArray(entries.map(entryToLines)));
+  }
+
   /// Remove all entries with matching values
   export function removeMatching(date: Date, locationName: string, shiftName: string): void {
     // Given the sorting (see append), all relevant rows will be consecutive
@@ -50,7 +67,6 @@ namespace DataSheet {
       // No matching entries.
       return;
     }
-    Logger.log("firstRow: %s", firstRow);
     // At least one matching entry, find more...
     let rows = 1;
     while (firstRow + rows < data.length && matches(data[firstRow + rows])) {
@@ -61,18 +77,7 @@ namespace DataSheet {
     sheet.deleteRows(firstRow + 2, rows);
   }
 
-  export function replaceRange(fromDate: Date, toDate: Date, entries: Entry.IEntry[]): void {
-    const existingOutsideRange: Entry.IEntry[] = [];
-    forEachEntry((e) => {
-      if (!(DateUtils.inRangeInclusive(e.date, fromDate, toDate))) {
-        existingOutsideRange.push(e);
-      }
-    });
-    clear();
-    add(existingOutsideRange.concat(entries));
-  }
-
-  export function forEachEntry(f: (e: Entry.IEntry) => void): void {
+  function forEachLine(f: (e: Line) => void): void {
     const data = sheet.getDataRange().getValues();
     data.shift();
     data.forEach((row) => {
@@ -90,21 +95,31 @@ namespace DataSheet {
     });
   }
 
-  // Call f with non empty lists of all entries at the same date, location and shift
-  export function forEachEntryGrouped(f: (entries: Entry.IEntry[]) => void): void {
-    let cur: Entry.IEntry[] = [];
-    forEachEntry((e: Entry.IEntry) => {
-      if (cur.length === 0 ||
-        (cur[0].date.getTime() === e.date.getTime() &&
-          cur[0].location.name === e.location.name &&
-          cur[0].shift.name === e.shift.name)) {
-        cur.push(e);
-      } else {
-        f(cur);
-        cur = [e];
+  export function replaceRange(fromDate: Date, toDate: Date, entries: Entry.IEntry[]): void {
+    const existingOutsideRange: Line[] = [];
+    forEachLine((l) => {
+      if (!(DateUtils.inRangeInclusive(l.date, fromDate, toDate))) {
+        existingOutsideRange.push(l);
       }
     });
-    if (cur.length !== 0) {
+    clear();
+    addLines(existingOutsideRange.concat(...entries.map(entryToLines)));
+  }
+
+  // Call f with non empty lists of all entries at the same date, location and shift
+  export function forEach(f: (entry: Entry.IEntry) => void): void {
+    let cur: Entry.IEntry | undefined;
+    forEachLine((l: Line) => {
+      if (cur === undefined) {
+        cur = { ...l, employees: [l.employee] };
+      } else if (Entry.sameSlot(cur, l)) {
+        cur.employees.push(l.employee);
+      } else {
+        f(cur);
+        cur = { ...l, employees: [l.employee] };
+      }
+    });
+    if (cur !== undefined) {
       f(cur);
     }
   }
