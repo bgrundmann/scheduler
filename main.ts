@@ -17,55 +17,24 @@
 //     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
 //   - Wie sollten man schulungen verrechnen?
 namespace Main {
-  /*
-  function diffScheduleAndData() {
-    const schedule = Prelude.forEachAsList(ScheduleSheet.forEachEntry);
-    const data = Prelude.forEachAsList(DataSheet.forEachEntry);
-    let onlyInSchedule = [];
-    let onlyInData = [];
-    let differs = [];
-    let s = 0;
-    let d = 0;
-    while (s < schedule.length && d < data.length) {
-      const se = schedule[s];
-      const de = data[d];
-      if (DateUtils.equal(se.date, de.date) &&
-        se.employee === de.employee &&
-        se.location.name === de.location.name)
-    }
-  }
-  */
-  export function saveEntriesFromScheduleToData() {
-    const range = ScheduleSheet.dateRange();
-    const existing: Entry.IEntry[] = [];
-    ScheduleSheet.forEachEntry((e) => { existing.push(e); });
-    DataSheet.replaceRange(range.from, range.until, existing);
-  }
-  export function recompute() {
-    saveEntriesFromScheduleToData();
-  }
   export function onOpenCallback() {
     Logger.clear();
-    // Make sure whatever was left on the schedule page last time is saved into the data sheet
-    saveEntriesFromScheduleToData();
-    // Now that is done reset the data sheet
-    // const d1 = new Date("2019-04-11");
-    // const d2 = new Date("2019-05-22");
-    // ScheduleSheet.setup(d1, d2);
-    // OverviewSheet.setup(d1, d2);
+    ScheduleSheet.syncScheduleToData();
   }
   export function changeDates() {
+    // make sure everything is saved first.
+    ScheduleSheet.syncScheduleToData();
     const fromDate = SheetUtils.askForDate("Von");
     if (!fromDate) { return; }
     const untilDate = SheetUtils.askForDate("Bis");
     if (!untilDate) { return; }
     ScheduleSheet.setup(fromDate, untilDate);
-    OverviewSheet.setup(fromDate, untilDate);
   }
   export function parseDoodle() {
     DoodleParser.parse();
   }
   export function employeesFromDoodleToSchedule() {
+    ScheduleSheet.syncScheduleToData();
     const range = ScheduleSheet.dateRange();
     const whoAndWhere = ScheduleSheet.employeesAndLocations();
     const entriesToPlace = Prelude.forEachAsList(PollSheet.forEachUnique, (p) => {
@@ -83,6 +52,7 @@ namespace Main {
     ScheduleSheet.setup(range.from, range.until);
   }
   export function backup() {
+    ScheduleSheet.syncScheduleToData();
     SheetUtils.backupSheet("Daten", "Backup");
     SheetUtils.backupSheet("Notizen", "Backup-Notizen");
   }
@@ -110,10 +80,6 @@ function zeitraumAendernCallback() {
   Main.changeDates();
 }
 
-function neuBerechnenCallback() {
-  Main.recompute();
-}
-
 function doodleEinlesenCallback() {
   if (SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Umfrage") === null) {
     SpreadsheetApp.getUi()
@@ -139,7 +105,6 @@ function sicherheitskopieWiederherstellenCallback() {
 function onOpen() {
   SpreadsheetApp.getUi()
   .createMenu("BS")
-  .addItem("Neu berechnen", "neuBerechnenCallback")
   .addItem("Mitarbeiter Doodle -> Schedule", "mitarbeiterUebertragenCallback")
   .addSeparator()
   .addItem("Zeitraum aendern", "zeitraumAendernCallback")

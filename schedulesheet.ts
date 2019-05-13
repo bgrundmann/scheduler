@@ -151,7 +151,7 @@ namespace ScheduleSheet {
     return { row: row + offset[0], column: column + offset[1] };
   }
 
-  /// place entries from DataSheet onto empty Schedule
+  /** place entries from DataSheet onto empty Schedule. */
   function placeEntries(): void {
     const entryRange = getEntriesRange();
     const data = entryRange.getRichTextValues();
@@ -427,7 +427,7 @@ namespace ScheduleSheet {
   /** Assume that the schedule is correct and if there are any differences between
    * the ScheduleSheet and the Datasheet, change the DataSheet to match.
    */
-  function syncScheduleToData() {
+  export function syncScheduleToData() {
     const diffs = compareWithDataSheet();
     diffs.forEach((diff) => {
       DataSheet.removeMatching(diff.date, diff.location.name, diff.shift.name);
