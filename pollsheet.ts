@@ -7,7 +7,7 @@ namespace PollSheet {
     date: Date;
     start: Date;
     end: Date;
-    shift: Shifts.IShift;
+    shift: Shifts.Shift;
   }
 
   export function forEach(f: (poll: IPoll) => void): void {

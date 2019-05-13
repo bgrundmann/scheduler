@@ -67,7 +67,7 @@ namespace ScheduleSheet {
   }
 
   function cellToSlot(row: number, column: number):
-    { date: Date, location: Locations.ILocation, shift: Shifts.IShift } | undefined {
+    { date: Date, location: Locations.ILocation, shift: Shifts.Shift } | undefined {
     if (column < FIRST_ENTRY_COLUMN) {
       return undefined;
     }
@@ -84,7 +84,7 @@ namespace ScheduleSheet {
     if (hpart === 2) {
       return undefined;
     }
-    let shift: Shifts.IShift;
+    let shift: Shifts.Shift;
     if (hpart === 0 && vpart === 1) {
       shift = Shifts.firstHalf;
     } else if (hpart === 1 && vpart === 1) {

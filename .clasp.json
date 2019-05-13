@@ -13,7 +13,6 @@
     "pollsheet.ts",
     "notesheet.ts",
     "schedulesheet.ts",
-    "overview.ts",
     "main.ts"
  ] 
 }

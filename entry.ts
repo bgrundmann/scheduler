@@ -14,7 +14,7 @@ namespace Entry {
   /** A slot is the combination of a Place and a shift.
    */
   export interface Slot extends Place {
-    readonly shift: Shifts.IShift;
+    readonly shift: Shifts.Shift;
   }
 
   export function sameSlot(s1: Slot, s2: Slot): boolean {
