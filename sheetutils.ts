@@ -19,6 +19,7 @@ namespace SheetUtils {
   export interface OnEditClear {
     kind: "clear";
     oldValue: any;
+    value: "";
   }
 
   export interface OnEditMassChange {
@@ -34,7 +35,7 @@ namespace SheetUtils {
     } else if (event.oldValue === undefined && event.value !== undefined) {
       return { kind: "insert", value: event.value };
     } else if (event.oldValue !== undefined && event.value.oldValue !== undefined) {
-      return { kind: "clear", oldValue: event.oldValue };
+      return { kind: "clear", oldValue: event.oldValue, value: "" };
     } else {
       return { kind: "change", oldValue: event.oldValue, value: event.value };
     }

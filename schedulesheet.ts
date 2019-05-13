@@ -27,7 +27,9 @@ namespace ScheduleSheet {
   }
 
   function splitNames(entry: string): string[] {
-    return entry.split(",").map((e) => e.trim()).filter((e) => e !== "");
+    const result = entry.split(",").map((e) => e.trim()).filter((e) => e !== "");
+    result.sort();
+    return result;
   }
 
   export function validateEntry(entry: string): boolean {
@@ -109,16 +111,6 @@ namespace ScheduleSheet {
     DateUtils.forEachDay(dateRange().from, dateRange().until, f);
   }
 
-  // function highlightEntries(): void {
-  //   const range = getEntriesRange();
-  //   const richTexts = range.getRichTextValues();
-  //   forEachDayOnSheet((date) => {
-  //     const row = entryRow(date);
-  //     const rich = richTexts[row - FIRST_ENTRY_ROW][0];
-  //     const e = rich.copy();
-  //   });
-  // }
-
   const boldStyle = SpreadsheetApp.newTextStyle().setBold(true).build();
   const normalStyle = SpreadsheetApp.newTextStyle().build();
   const errorStyle = SpreadsheetApp.newTextStyle().setForegroundColor("red").setBold(true).build();
@@ -152,6 +144,13 @@ namespace ScheduleSheet {
     return SheetUtils.buildRichTexts(elements);
   }
 
+  function slotToCell(slot: Entry.Slot): { row: number, column: number } {
+    const row = dateToRow(slot.date);
+    const column = placeToColumn(slot);
+    const offset = slot.shift.entryDisplayOffset;
+    return { row: row + offset[0], column: column + offset[1] };
+  }
+
   /// place entries from DataSheet onto empty Schedule
   function placeEntries(): void {
     const entryRange = getEntriesRange();
@@ -159,12 +158,9 @@ namespace ScheduleSheet {
     // place entries from data sheet into schedule sheet
     DataSheet.forEach((entry: Entry.IEntry) => {
       if (DateUtils.inRangeInclusive(entry.date, dateRange().from, dateRange().until)) {
-        let row = dateToRow(entry.date) - FIRST_ENTRY_ROW;
-        let col = placeToColumn(entry) - FIRST_ENTRY_COLUMN;
-        const offset = entry.shift.entryDisplayOffset;
-        row += offset[0];
-        col += offset[1];
-        data[row][col] = layoutEntry(entry);
+        const cell = slotToCell(entry);
+        Logger.log("placing %s at %s", entry, cell);
+        data[cell.row - FIRST_ENTRY_ROW][cell.column - FIRST_ENTRY_COLUMN] = layoutEntry(entry);
       }
     });
     entryRange.setRichTextValues(data);
@@ -313,10 +309,12 @@ namespace ScheduleSheet {
               { shift: Shifts.whole, names: whole },
             ] ;
         all.forEach((e) => {
-          const entry: Entry.IEntry = {
-            date, employees: e.names, location: Locations.all()[loc.ndx], shift: e.shift,
-          };
-          f(entry);
+          if (e.names.length > 0) {
+            const entry: Entry.IEntry = {
+              date, employees: e.names, location: Locations.all()[loc.ndx], shift: e.shift,
+            };
+            f(entry);
+          }
         });
       });
     });
@@ -329,36 +327,87 @@ namespace ScheduleSheet {
       Prelude.compareBy((s: Entry.Slot) => s.shift.name, Prelude.stringCompare),
     ]);
 
-  // /** Compare whats on the sheet with what's in the daten section.  Returns a list
-  //  * of all slots that don't match.
-  //  */
-  // function compareWithDataSheet(): Entry.Slot[] {
-  //   const result = [];
-  //   const dr = dateRange();
-  //   const data =
-  //     Prelude.forEachAsList(DataSheet.forEachEntry, ((e) => DateUtils.inRangeInclusive(e.date, dr.from, dr.until)));
-  //   const schedule =
-  //     Prelude.forEachAsList(forEachEntry);
-  //   let d = 0;
-  //   let s = 0;
-  //   function add(e: Entry.IEntry) {
-  //     // only add if that slot isn't already there
-  //     if (result.length > 0 && result[])
-  //   }
-  //   while (d < data.length && s < schedule.length) {
-  //     switch (compareSlot(data[d], schedule[s])) {
-  //       case "lt":
-  //         break;
+  interface Diff extends Entry.Slot {
+    employeesData: string[];
+    employeesSchedule: string[];
+  }
 
-  //       case "gt":
-  //         break;
+  /** Compare whats on the sheet with what's in the daten section.  Returns a list
+   * of all slots that don't match.
+   */
+  export function compareWithDataSheet(): Diff[] {
+    const result = [];
+    const dr = dateRange();
+    const data =
+      Prelude.forEachAsList(DataSheet.forEach, ((e) => DateUtils.inRangeInclusive(e.date, dr.from, dr.until)));
+    const schedule =
+      Prelude.forEachAsList(forEachEntry);
+    let d = 0;
+    let s = 0;
+    while (d < data.length && s < schedule.length) {
+      switch (compareSlot(data[d], schedule[s])) {
+        case "lt":
+          const diffLt = {
+            date: data[d].date,
+            location: data[d].location,
+            shift: data[d].shift,
+            employeesData: data[d].employees,
+            employeesSchedule: [],
+          };
+          result.push(diffLt);
+          d++;
+          break;
 
-  //       case "eq":
+        case "eq":
+          if (!Prelude.arrayEqual(data[d].employees, schedule[s].employees)) {
+            const diffEq = {
+              date: data[d].date,
+              location: data[d].location,
+              shift: data[d].shift,
+              employeesData: data[d].employees,
+              employeesSchedule: schedule[s].employees,
+            };
+            result.push(diffEq);
+          }
+          d++;
+          s++;
+          break;
 
-  //         break;
-  //     }
-  //   }
-  // }
+        case "gt":
+          const diffGt = {
+            date: data[d].date,
+            location: data[d].location,
+            shift: data[d].shift,
+            employeesData: [],
+            employeesSchedule: schedule[s].employees,
+          };
+          result.push(diffGt);
+          s++;
+          break;
+      }
+    }
+    while (d < data.length) {
+      const diffLt = {
+        date: data[d].date,
+        location: data[d].location,
+        shift: data[d].shift,
+        employeesData: data[d].employees,
+        employeesSchedule: [],
+      };
+      result.push(diffLt);
+    }
+    while (d < schedule.length) {
+      const diffGt = {
+        date: data[d].date,
+        location: data[d].location,
+        shift: data[d].shift,
+        employeesData: [],
+        employeesSchedule: schedule[s].employees,
+      };
+      result.push(diffGt);
+    }
+    return result;
+  }
 
   /** Get employees and locations to schedule as dictionary (from the left pane).
    * Returns only those employees who should be placed.
@@ -375,33 +424,55 @@ namespace ScheduleSheet {
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
 
+  /** Assume that the schedule is correct and if there are any differences between
+   * the ScheduleSheet and the Datasheet, change the DataSheet to match.
+   */
+  function syncScheduleToData() {
+    const diffs = compareWithDataSheet();
+    diffs.forEach((diff) => {
+      DataSheet.removeMatching(diff.date, diff.location.name, diff.shift.name);
+      const entry = {
+        date: diff.date,
+        location: diff.location,
+        shift: diff.shift,
+        employees: diff.employeesSchedule,
+      };
+      DataSheet.add([entry]);
+    });
+  }
+
   function onEditCallbackLogic(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+    // In my testing OnEdit events seem to always happen.
+    // But on the other hand there are comments on stackexchange indicating
+    // that multiple OnEdit events can get coalesced.
+    // So to save the changes from the schedule -> data we always use the
+    // diff and patch method (aka syncScheduleToData).  This means that if
+    // we missed a previous event we will save its effect eventually.
+    // We only use the single cell changes to force the redrawing of the
+    // slot (so that we can do highlighting of unknown employees etc -- immediately
+    // after the change).
+    // TODO: handle the notesection in the same way.
     const ev = SheetUtils.onEditEvent(e);
+    syncScheduleToData();
     switch (ev.kind) {
       case "mass-change":
-        const range = dateRange();
-        const entriesOnSchedule = Prelude.forEachAsList(forEachEntry);
-        DataSheet.replaceRange(range.from, range.until, entriesOnSchedule);
         NoteSection.save();
         break;
 
       case "change":
       case "insert":
       case "clear":
-        // Otherwise do the one cell fast path:
-        // figure out which entry was changed, if any
         const slot = cellToSlot(e.range.getRow(), e.range.getColumn());
-        // Change wasn't of a entry cell so we are good.
-        if (slot !== undefined) {
-          // remove any relevant existing entries in the datasheet
-          DataSheet.removeMatching(slot.date, slot.location.name, slot.shift.name);
-          // and create new ones.
-          const employees = splitNames(e.value);
-          const entry = { ...slot, employees };
-          DataSheet.add([entry]);
-          // And also redraw that one cell
+        if (slot !== undefined) { // change was of a slot
+          // Redraw that one slot
+          const entry = {
+            date: slot.date,
+            location: slot.location,
+            shift: slot.shift,
+            employees: splitNames(ev.value.toString()),
+          };
           e.range.setRichTextValue(layoutEntry(entry));
-        } else if (e.range.getColumn() === noteColumn()) {
+        } else if (e.range.getColumn() === noteColumn()) { // change of a note
           const date = rowToDate(e.range.getRow());
           if (!date) {
             /// notes outside the date column are ignored
@@ -439,5 +510,13 @@ namespace ScheduleSheet {
     } else {
       Logger.log("Recursive OnEditCallback -- not doing anything");
     }
+  }
+}
+
+function testCompare() {
+  const result = ScheduleSheet.compareWithDataSheet();
+  Logger.log("diffs: %s", result.length);
+  for (let i = 0; i < Math.min(result.length, 4); i++) {
+    Logger.log("diff: %s", result[i]);
   }
 }

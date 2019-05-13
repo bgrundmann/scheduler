@@ -9,7 +9,12 @@ namespace DataSheet {
   const sheet = spreadsheet.getSheetByName("Daten");
 
   function entryToLines(e: Entry.IEntry): Line[] {
-    return e.employees.map((employee) => ({ ...e, employee }));
+    return e.employees.map((employee) => ({
+      date: e.date,
+      location: e.location,
+      shift: e.shift,
+      employee,
+    }));
   }
 
   export function clear(): void {
@@ -111,12 +116,12 @@ namespace DataSheet {
     let cur: Entry.IEntry | undefined;
     forEachLine((l: Line) => {
       if (cur === undefined) {
-        cur = { ...l, employees: [l.employee] };
+        cur = { date: l.date, location: l.location, shift: l.shift, employees: [l.employee] };
       } else if (Entry.sameSlot(cur, l)) {
         cur.employees.push(l.employee);
       } else {
         f(cur);
-        cur = { ...l, employees: [l.employee] };
+        cur = { date: l.date, location: l.location, shift: l.shift, employees: [l.employee] };
       }
     });
     if (cur !== undefined) {

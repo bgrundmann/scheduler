@@ -52,6 +52,10 @@ namespace Prelude {
     }
   }
 
+  export function arrayEqual(a1: string[], a2: string[]) {
+    return (a1.length === a2.length) && a1.every((elem, ndx) => elem === a2[ndx]);
+  }
+
   export function findIndex<T>(length: number,
                                get: (index: number) => T,
                                predicate: (elem: T) => boolean, start?: number): number|undefined {
