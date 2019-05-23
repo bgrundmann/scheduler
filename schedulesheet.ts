@@ -144,10 +144,24 @@ namespace ScheduleSheet {
     return SheetUtils.buildRichTexts(elements);
   }
 
+  function entryDisplayOffset(kind: Shifts.Kind): [number, number] {
+    switch (kind) {
+      case Shifts.Kind.Morning:
+        return [1, 0];
+      case Shifts.Kind.Afternoon:
+        return [1, 1];
+      case Shifts.Kind.WholeDay:
+        return [0, 0];
+      default:
+        // only there to make the compiler happy
+        return [0, 0];
+    }
+  }
+
   function slotToCell(slot: Entry.Slot): { row: number, column: number } {
     const row = dateToRow(slot.date);
     const column = placeToColumn(slot);
-    const offset = slot.shift.entryDisplayOffset;
+    const offset = entryDisplayOffset(slot.shift.kind);
     return { row: row + offset[0], column: column + offset[1] };
   }
 
