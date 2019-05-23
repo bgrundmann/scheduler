@@ -16,6 +16,8 @@
 //   - Samstags sind nur 6 stunden
 //     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
 //   - Wie sollten man schulungen verrechnen?
+//
+//   - remove ScheduleSheet use of shift name
 namespace Main {
   export function onOpenCallback() {
     Logger.clear();
@@ -42,10 +44,10 @@ namespace Main {
     });
     const entries: Entry.IEntry[] = entriesToPlace.map((ps) => {
       return {
-        employees : [ps.employee],
-        date : ps.date,
-        location : Prelude.unwrap(whoAndWhere[ps.employee].location),
-        shift : ps.shift,
+        employees: [ps.employee],
+        date: ps.date,
+        location: Prelude.unwrap(whoAndWhere[ps.employee].location),
+        shift: ps.shift,
       };
     });
     DataSheet.add(entries);
@@ -104,15 +106,15 @@ function sicherheitskopieWiederherstellenCallback() {
 
 function onOpen() {
   SpreadsheetApp.getUi()
-  .createMenu("BS")
-  .addItem("Mitarbeiter Doodle -> Schedule", "mitarbeiterUebertragenCallback")
-  .addSeparator()
-  .addItem("Zeitraum aendern", "zeitraumAendernCallback")
-  .addItem("Doodle einlesen", "doodleEinlesenCallback")
-  .addSeparator()
-  .addItem("Sicherheitskopie erstellen", "sicherheitskopieErstellenCallback")
-  .addItem("Sicherheitskopie wiederherstellen!", "sicherheitskopieWiederherstellenCallback")
-  .addToUi();
+    .createMenu("BS")
+    .addItem("Mitarbeiter Doodle -> Schedule", "mitarbeiterUebertragenCallback")
+    .addSeparator()
+    .addItem("Zeitraum aendern", "zeitraumAendernCallback")
+    .addItem("Doodle einlesen", "doodleEinlesenCallback")
+    .addSeparator()
+    .addItem("Sicherheitskopie erstellen", "sicherheitskopieErstellenCallback")
+    .addItem("Sicherheitskopie wiederherstellen!", "sicherheitskopieWiederherstellenCallback")
+    .addToUi();
   Main.onOpenCallback();
 }
 
@@ -120,10 +122,15 @@ function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit) {
   Main.onEditCallback(e);
 }
 
-function initialSetup() {
+function initialSetup1() {
   const spreadsheet = SpreadsheetApp.getActive();
   spreadsheet.insertSheet("Schedule");
-  spreadsheet.insertSheet("Uebersicht");
+  spreadsheet.insertSheet("Notizen");
   spreadsheet.insertSheet("Daten");
   spreadsheet.insertSheet("Mitarbeiter");
+  DataSheet.initialSetup();
+}
+
+function initialSetup2() {
+  ScheduleSheet.setup(new Date("2019-05-23"), new Date("2019-06-26"));
 }

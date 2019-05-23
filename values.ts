@@ -12,29 +12,36 @@ namespace Values {
     }
   }
 
-  export function asDate(v: any): Date {
+  export function asDate(v: unknown): Date {
     if (v instanceof Date) {
       return v;
     }
     throw new ValueConversionError("Date", v);
   }
 
-  export function asString(v: any): string {
+  export function asString(v: unknown): string {
     if (typeof v === "string") {
       return v;
     }
     throw new ValueConversionError("string", v);
   }
 
-  export function asNumber(v: any): number {
+  export function asNumber(v: unknown): number {
     if (typeof v === "number") {
       return v;
     }
     throw new ValueConversionError("number", v);
   }
 
-  export function get<E>(values: any[][],
-                         row: number, col: number, conv: (x: any) => E): E {
+  export function asInterval(v: unknown): Interval {
+    if (v instanceof Date) {
+      return Interval.ofMilliSeconds(v.getTime());
+    }
+    throw new ValueConversionError("Interval", v);
+  }
+
+  export function get<E>(values: unknown[][],
+    row: number, col: number, conv: (x: unknown) => E): E {
     try {
       return conv(values[row][col]);
     } catch (e) {

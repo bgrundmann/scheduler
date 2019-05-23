@@ -8,6 +8,12 @@ namespace DataSheet {
   const spreadsheet = SpreadsheetApp.getActive();
   const sheet = spreadsheet.getSheetByName("Daten");
 
+  export function initialSetup() {
+    sheet.getRange("E2:E").setNumberFormat("[hh]:mm");
+    sheet.getRange("F2:F").setNumberFormat("[hh]:mm");
+    sheet.getRange("G2:G").setNumberFormat("[hh]:mm");
+  }
+
   function entryToLines(e: Entry.IEntry): Line[] {
     return e.employees.map((employee) => ({
       date: e.date,
@@ -24,17 +30,22 @@ namespace DataSheet {
   }
 
   function addLines(lines: Line[]): void {
-    const values = lines.map((l: Line) =>
-        [ l.date, l.employee, l.location.name, l.shift.name,
-          l.shift.start, l.shift.stop, l.shift.breakLength,
-          l.shift.stop - l.shift.start - l.shift.breakLength ]);
+    const values = lines.map((l: Line) => {
+      const wallclocktime = Interval.diff(l.shift.stop, l.shift.start);
+      const worktime = Interval.diff(wallclocktime, l.shift.breakLength);
+
+      return [l.date, l.employee, l.location.name, l.shift.name,
+      l.shift.start.toHHMM(), l.shift.stop.toHHMM(), l.shift.breakLength.toHHMM(),
+      worktime.getTotalMinutes(),
+      ];
+    });
     if (values.length > 0) {
       sheet.getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
 
       // Make sure the whole sheet is still correctly sorted
       const allData = sheet.getDataRange();
       const withoutHeader = allData.offset(1, 0, allData.getNumRows() - 1);
-      withoutHeader.sort( [
+      withoutHeader.sort([
         // date
         { column: 1, ascending: true },
         // location
@@ -43,7 +54,7 @@ namespace DataSheet {
         { column: 4, ascending: false },
         // employee
         { column: 2, ascending: true },
-       ]);
+      ]);
     }
   }
 
@@ -90,9 +101,9 @@ namespace DataSheet {
       const employee = Values.asString(row[1]);
       const locationName = Values.asString(row[2]);
       const shiftName = Values.asString(row[3]);
-      const shiftStart = Values.asNumber(row[4]);
-      const shiftStop = Values.asNumber(row[5]);
-      const shiftBreakLength = Values.asNumber(row[6]);
+      const shiftStart = Values.asInterval(row[4]);
+      const shiftStop = Values.asInterval(row[5]);
+      const shiftBreakLength = Values.asInterval(row[6]);
       const location = Prelude.unwrap(Locations.byName(locationName));
       const shift = Prelude.unwrap(Shifts.byName(shiftName));
       // TODO: validate shift settings?  Think about the potential mismatch

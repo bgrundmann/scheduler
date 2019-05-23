@@ -13,7 +13,7 @@ namespace ScheduleSheet {
   const spreadsheet = SpreadsheetApp.getActive();
   const sheet = spreadsheet.getSheetByName(ScheduleSheet.NAME);
 
-  let dateRangeCache: { from: Date, until: Date }|undefined;
+  let dateRangeCache: { from: Date, until: Date } | undefined;
 
   // Return the date range as given by the 'von' -> 'bis' cells
   export function dateRange(): { from: Date, until: Date } {
@@ -46,12 +46,12 @@ namespace ScheduleSheet {
   }
 
   /** Convert row number into date. */
-  function rowToDate(row: number): Date|undefined {
+  function rowToDate(row: number): Date | undefined {
     if (row < FIRST_ENTRY_ROW) {
       return undefined;
     }
     const dr = dateRange();
-    const date = DateUtils.addDays( dr.from, Math.floor((row - FIRST_ENTRY_ROW) / 2) );
+    const date = DateUtils.addDays(dr.from, Math.floor((row - FIRST_ENTRY_ROW) / 2));
     if (!DateUtils.inRangeInclusive(date, dr.from, dr.until)) {
       return undefined;
     }
@@ -66,8 +66,7 @@ namespace ScheduleSheet {
     return FIRST_ENTRY_COLUMN + Locations.all().length * (COLUMNS_PER_ENTRY + 1) + 1;
   }
 
-  function cellToSlot(row: number, column: number):
-    { date: Date, location: Locations.ILocation, shift: Shifts.Shift } | undefined {
+  function cellToSlot(row: number, column: number): { date: Date, location: Locations.ILocation, shift: Shifts.Shift } | undefined {
     if (column < FIRST_ENTRY_COLUMN) {
       return undefined;
     }
@@ -86,11 +85,11 @@ namespace ScheduleSheet {
     }
     let shift: Shifts.Shift;
     if (hpart === 0 && vpart === 1) {
-      shift = Shifts.firstHalf;
+      shift = Shifts.byName("Vormittags")!;
     } else if (hpart === 1 && vpart === 1) {
-      shift = Shifts.secondHalf;
+      shift = Shifts.byName("Nachmittags")!;
     } else if (vpart === 0) {
-      shift = Shifts.whole;
+      shift = Shifts.byName("Ganztags")!;
     } else {
       // Do not know what is going on
       Logger.log("cellToSlot bug? (row=%s) (column=%s)", row, column);
@@ -195,7 +194,7 @@ namespace ScheduleSheet {
 
   /** setup the part of the sheet on the left that lists employees and how much they work. */
   function setupEmployeeSection(): void {
-    const employees = EmployeeSheet.all().map((e) => [ e.employee ]);
+    const employees = EmployeeSheet.all().map((e) => [e.employee]);
     sheet.getRange(FIRST_ENTRY_ROW - 1, 1, 1, 3).setValues([["Mitarbeiter", "Stunden", ""]]).setFontWeight("bold");
     const employeesRange = sheet.getRange(FIRST_ENTRY_ROW, 1, employees.length, 1);
     // const employeeInDoodleRule = SpreadsheetApp.newConditionalFormatRule()
@@ -207,8 +206,8 @@ namespace ScheduleSheet {
     employeesRange.setValues(employees);
     const oneCell =
       sheet.getRange(FIRST_ENTRY_ROW, 2)
-      .setFormula('=SUMIFS(Daten!H$2:H; Daten!B$2:B; "="&A3; Daten!A$2:A; ">="&$B$1; Daten!A$2:A; "<="&$D$1)')
-    .copyTo(sheet.getRange(FIRST_ENTRY_ROW, 2, employees.length, 1));
+        .setFormula('=SUMIFS(Daten!H$2:H; Daten!B$2:B; "="&A3; Daten!A$2:A; ">="&$B$1; Daten!A$2:A; "<="&$D$1)/60')
+        .copyTo(sheet.getRange(FIRST_ENTRY_ROW, 2, employees.length, 1));
     const locs = Locations.all().map((c) => c.name);
     const rule = SpreadsheetApp.newDataValidation().requireValueInList(locs).build();
     sheet.getRange(FIRST_ENTRY_ROW, 3, employees.length, 1).setDataValidation(rule);
@@ -278,7 +277,7 @@ namespace ScheduleSheet {
       sheet.getRange(row, INDEX_COLUMN).setValue(date).setNumberFormat('ddd", "mmmm" "d');
       sheet.getRange(row, INDEX_COLUMN, 2, 1)
         .mergeVertically()
-        .setBorder(true, true, true, true, false, false,  "#000000", SpreadsheetApp.BorderStyle.SOLID)
+        .setBorder(true, true, true, true, false, false, "#000000", SpreadsheetApp.BorderStyle.SOLID)
         .setVerticalAlignment("middle");
       Locations.all().forEach((loc) => {
         const col = placeToColumn({ date, location: loc });
@@ -318,10 +317,10 @@ namespace ScheduleSheet {
         const firstHalf = splitNames(Values.get(data, row + 1, col, Values.asString));
         const secondHalf = splitNames(Values.get(data, row + 1, col + 1, Values.asString));
         const all =
-            [ { shift : Shifts.firstHalf, names : firstHalf },
-              { shift : Shifts.secondHalf, names : secondHalf },
-              { shift: Shifts.whole, names: whole },
-            ] ;
+          [{ shift: Shifts.byName("Vormittags")!, names: firstHalf },
+          { shift: Shifts.byName("Nachmittags")!, names: secondHalf },
+          { shift: Shifts.byName("Ganztags")!, names: whole },
+          ];
         all.forEach((e) => {
           if (e.names.length > 0) {
             const entry: Entry.IEntry = {
@@ -335,7 +334,7 @@ namespace ScheduleSheet {
   }
 
   const compareSlot =
-    Prelude.lexiographic ([
+    Prelude.lexiographic([
       Prelude.compareBy((s: Entry.Slot) => s.date, DateUtils.compare),
       Prelude.compareBy((s: Entry.Slot) => s.location.name, Prelude.stringCompare),
       Prelude.compareBy((s: Entry.Slot) => s.shift.name, Prelude.stringCompare),
@@ -410,11 +409,11 @@ namespace ScheduleSheet {
       };
       result.push(diffLt);
     }
-    while (d < schedule.length) {
+    while (s < schedule.length) {
       const diffGt = {
-        date: data[d].date,
-        location: data[d].location,
-        shift: data[d].shift,
+        date: schedule[s].date,
+        location: schedule[s].location,
+        shift: schedule[s].shift,
         employeesData: [],
         employeesSchedule: schedule[s].employees,
       };
@@ -432,8 +431,8 @@ namespace ScheduleSheet {
       .getValues()
       .filter((row) => row[2] !== "")
       .map((row) => ({
-        employee : Values.asString(row[0]),
-        location : Locations.byName(Values.asString(row[2])),
+        employee: Values.asString(row[0]),
+        location: Locations.byName(Values.asString(row[2])),
       }));
     return Prelude.makeDictionary(data, (d) => d.employee);
   }
@@ -455,7 +454,7 @@ namespace ScheduleSheet {
     });
   }
 
-  function onEditCallbackLogic(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit): void {
     // In my testing OnEdit events seem to always happen.
     // But on the other hand there are comments on stackexchange indicating
     // that multiple OnEdit events can get coalesced.
@@ -499,30 +498,12 @@ namespace ScheduleSheet {
               NoteSheet.deleteMatching(date, ndx);
               break;
             case "change":
-            case  "insert":
+            case "insert":
               NoteSheet.addOrReplace({ date, index: ndx, text: e.value });
               break;
           }
         }
         break;
-    }
-  }
-
-  let insideOnEditCallback = false;
-
-  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit): void {
-    if (!insideOnEditCallback) {
-      Logger.log("--> OnEditCallback");
-      insideOnEditCallback = true;
-      try {
-        onEditCallbackLogic(e);
-      } catch (error) {
-        // do nothing
-      }
-      insideOnEditCallback = false;
-      Logger.log("<-- OnEditCallback");
-    } else {
-      Logger.log("Recursive OnEditCallback -- not doing anything");
     }
   }
 }

@@ -8,31 +8,34 @@ namespace Shifts {
 
   export interface Shift {
     name: string;
-    start: number;
-    stop: number;
-    breakLength: number;
+    start: Interval;
+    stop: Interval;
+    breakLength: Interval;
     kind: Kind;
   }
-  export const firstHalf: Shift = {
-    name : "Vormittags", start : 10, stop : 14, breakLength : 0,
-    kind : Kind.Morning,
-  };
-  export const secondHalf: Shift = {
-    name : "Nachmittags", start : 13, stop : 19, breakLength : 0,
-    kind : Kind.Afternoon,
-  };
-  export const whole: Shift = {
-    name : "Ganztags", start : 10, stop : 19, breakLength : 1,
-    kind : Kind.WholeDay,
-  };
-  export const all = // in the order they appear on the data sheet
-      [ Shifts.firstHalf, Shifts.secondHalf, Shifts.whole ];
+  function setupStandardShifts(): Shift[] {
+    const firstHalf: Shift = {
+      name: "Vormittags", start: Interval.hhmm(10, 0), stop: Interval.hhmm(14, 0), breakLength: Interval.zero,
+      kind: Kind.Morning,
+    };
+    const secondHalf: Shift = {
+      name: "Nachmittags", start: Interval.hhmm(13, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.zero,
+      kind: Kind.Afternoon,
+    };
+    const whole: Shift = {
+      name: "Ganztags", start: Interval.hhmm(10, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.hhmm(1, 0),
+      kind: Kind.WholeDay,
+    };
+    const all = // in the order they appear on the data sheet
+      [firstHalf, secondHalf, whole];
+    return all;
+  }
 
-  let byNameCache: ( (name: string) => Shift | undefined ) | undefined ;
+  let byNameCache: ((name: string) => Shift | undefined) | undefined;
 
   export function byName(name: string): Shift | undefined {
     if (!byNameCache) {
-      byNameCache = Prelude.makeFindByName(Shifts.all);
+      byNameCache = Prelude.makeFindByName(setupStandardShifts());
     }
     return byNameCache(name);
   }
