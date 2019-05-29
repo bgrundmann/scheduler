@@ -33,8 +33,9 @@ namespace DataSheet {
     const values = lines.map((l: Line) => {
       const wallclocktime = Interval.diff(l.shift.stop, l.shift.start);
       const worktime = Interval.diff(wallclocktime, l.shift.breakLength);
+      const kind = Shifts.germanNameOfKind(l.shift.kind);
 
-      return [l.date, l.employee, l.location.name, l.shift.name,
+      return [l.date, l.employee, l.location.name, kind,
       l.shift.start.toHHMM(), l.shift.stop.toHHMM(), l.shift.breakLength.toHHMM(),
       worktime.getTotalMinutes(),
       ];
@@ -50,7 +51,7 @@ namespace DataSheet {
         { column: 1, ascending: true },
         // location
         { column: 3, ascending: true },
-        // shift
+        // shift (ascending false on purpose see comment on top of scheduleSheet)
         { column: 4, ascending: false },
         // employee
         { column: 2, ascending: true },
@@ -66,14 +67,14 @@ namespace DataSheet {
   }
 
   /// Remove all entries with matching values
-  export function removeMatching(date: Date, locationName: string, shiftName: string): void {
+  export function removeMatching(date: Date, locationName: string, shiftKind: Shifts.Kind): void {
     // Given the sorting (see append), all relevant rows will be consecutive
     const allData = sheet.getDataRange();
     const withoutHeader = allData.offset(1, 0, allData.getNumRows() - 1);
     const data = withoutHeader.getValues();
     function matches(row: any[]) {
       return (DateUtils.equal(Values.asDate(row[0]), date) &&
-        row[2] === locationName && row[3] === shiftName);
+        row[2] === locationName && row[3] === Shifts.germanNameOfKind(shiftKind));
     }
     let firstRow = 0;
     while (firstRow < data.length && !matches(data[firstRow])) {
@@ -100,13 +101,11 @@ namespace DataSheet {
       const date = Values.asDate(row[0]);
       const employee = Values.asString(row[1]);
       const locationName = Values.asString(row[2]);
-      const shiftName = Values.asString(row[3]);
       const shiftStart = Values.asInterval(row[4]);
       const shiftStop = Values.asInterval(row[5]);
       const shiftBreakLength = Values.asInterval(row[6]);
       const location = Prelude.unwrap(Locations.byName(locationName));
-      const shift = Prelude.unwrap(Shifts.byName(shiftName));
-      // TODO: validate shift settings?  Think about the potential mismatch
+      const shift = Prelude.unwrap(Shifts.create(shiftStart, shiftStop, shiftBreakLength));
       f({ date, employee, location, shift });
     });
   }

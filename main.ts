@@ -15,9 +15,8 @@
 //   - doodle box?
 //   - Samstags sind nur 6 stunden
 //     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
-//   - Wie sollten man schulungen verrechnen?
+//   - Wie sollte man schulungen verrechnen?
 //
-//   - remove ScheduleSheet use of shift name
 namespace Main {
   export function onOpenCallback() {
     Logger.clear();

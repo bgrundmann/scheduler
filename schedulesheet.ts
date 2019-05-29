@@ -1,6 +1,10 @@
 /** @OnlyCurrentDoc */
 /** The schedule sheet draws one box per place, each box being subdivided into 3 cells
  * one for each of the standard slots.
+ * NOTE: There is a tricky dependency between forEach here and in dataSheet.  In particular
+ * the comparison function relies on both being iterated in the same order.  Which in turn
+ * means that the order of the datasheet is carefully setup (in particular note that the
+ * values chosen for kind are such that the ordering matches what forEach does below)
  */
 namespace ScheduleSheet {
   const INDEX_COLUMN = 5;
@@ -84,12 +88,13 @@ namespace ScheduleSheet {
       return undefined;
     }
     let shift: Shifts.Shift;
+    // TODO move the magic constants out of here
     if (hpart === 0 && vpart === 1) {
-      shift = Shifts.byName("Vormittags")!;
+      shift = Shifts.create(Interval.hhmm(10, 0), Interval.hhmm(14, 0), Interval.zero);
     } else if (hpart === 1 && vpart === 1) {
-      shift = Shifts.byName("Nachmittags")!;
+      shift = Shifts.create(Interval.hhmm(13, 0), Interval.hhmm(19, 0), Interval.zero);
     } else if (vpart === 0) {
-      shift = Shifts.byName("Ganztags")!;
+      shift = Shifts.create(Interval.hhmm(10, 0), Interval.hhmm(19, 0), Interval.hhmm(1, 0));
     } else {
       // Do not know what is going on
       Logger.log("cellToSlot bug? (row=%s) (column=%s)", row, column);
@@ -309,6 +314,10 @@ namespace ScheduleSheet {
   /** Calls f for each entry on the schedule sheet. */
   export function forEachEntry(f: (schedule: Entry.IEntry) => void): void {
     const data = getEntriesRange().getValues();
+    const morning = Shifts.create(Interval.hhmm(10, 0), Interval.hhmm(14, 0), Interval.zero);
+    const afternoon = Shifts.create(Interval.hhmm(13, 0), Interval.hhmm(19, 0), Interval.zero);
+    const wholeDay = Shifts.create(Interval.hhmm(10, 0), Interval.hhmm(19, 0), Interval.hhmm(1, 0));
+
     forEachDayOnSheet((date) => {
       Locations.all().forEach((loc) => {
         const row = dateToRow(date) - FIRST_ENTRY_ROW;
@@ -317,9 +326,9 @@ namespace ScheduleSheet {
         const firstHalf = splitNames(Values.get(data, row + 1, col, Values.asString));
         const secondHalf = splitNames(Values.get(data, row + 1, col + 1, Values.asString));
         const all =
-          [{ shift: Shifts.byName("Vormittags")!, names: firstHalf },
-          { shift: Shifts.byName("Nachmittags")!, names: secondHalf },
-          { shift: Shifts.byName("Ganztags")!, names: whole },
+          [{ shift: morning, names: firstHalf },
+          { shift: afternoon, names: secondHalf },
+          { shift: wholeDay, names: whole },
           ];
         all.forEach((e) => {
           if (e.names.length > 0) {
@@ -337,7 +346,7 @@ namespace ScheduleSheet {
     Prelude.lexiographic([
       Prelude.compareBy((s: Entry.Slot) => s.date, DateUtils.compare),
       Prelude.compareBy((s: Entry.Slot) => s.location.name, Prelude.stringCompare),
-      Prelude.compareBy((s: Entry.Slot) => s.shift.name, Prelude.stringCompare),
+      Prelude.compareBy((s: Entry.Slot) => s.shift, Shifts.compare),
     ]);
 
   interface Diff extends Entry.Slot {
@@ -443,7 +452,7 @@ namespace ScheduleSheet {
   export function syncScheduleToData() {
     const diffs = compareWithDataSheet();
     diffs.forEach((diff) => {
-      DataSheet.removeMatching(diff.date, diff.location.name, diff.shift.name);
+      DataSheet.removeMatching(diff.date, diff.location.name, diff.shift.kind);
       const entry = {
         date: diff.date,
         location: diff.location,

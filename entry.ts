@@ -18,7 +18,7 @@ namespace Entry {
   }
 
   export function sameSlot(s1: Slot, s2: Slot): boolean {
-    return samePlace(s1, s2) && s1.shift.name === s2.shift.name;
+    return samePlace(s1, s2) && Shifts.compare(s1.shift, s2.shift) === "eq";
   }
 
   /** A single entry in the schedule corresponds to all

@@ -6,24 +6,34 @@ namespace Config {
 namespace Shifts {
   export const enum Kind { Morning, Afternoon, WholeDay }
 
+  export function germanNameOfKind(k: Kind): string {
+    return ["Vormittags", "Nachmittags", "Ganztags"][k];
+  }
+
   export interface Shift {
-    name: string;
     start: Interval;
     stop: Interval;
     breakLength: Interval;
     kind: Kind;
   }
+
+  export const compare = Prelude.lexiographic([
+    Prelude.compareBy((s: Shift) => s.start, Interval.compare),
+    Prelude.compareBy((s: Shift) => s.stop, Interval.compare),
+    Prelude.compareBy((s: Shift) => s.breakLength, Interval.compare),
+  ]);
+
   function setupStandardShifts(): Shift[] {
     const firstHalf: Shift = {
-      name: "Vormittags", start: Interval.hhmm(10, 0), stop: Interval.hhmm(14, 0), breakLength: Interval.zero,
+      start: Interval.hhmm(10, 0), stop: Interval.hhmm(14, 0), breakLength: Interval.zero,
       kind: Kind.Morning,
     };
     const secondHalf: Shift = {
-      name: "Nachmittags", start: Interval.hhmm(13, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.zero,
+      start: Interval.hhmm(13, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.zero,
       kind: Kind.Afternoon,
     };
     const whole: Shift = {
-      name: "Ganztags", start: Interval.hhmm(10, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.hhmm(1, 0),
+      start: Interval.hhmm(10, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.hhmm(1, 0),
       kind: Kind.WholeDay,
     };
     const all = // in the order they appear on the data sheet
@@ -31,12 +41,36 @@ namespace Shifts {
     return all;
   }
 
-  let byNameCache: ((name: string) => Shift | undefined) | undefined;
+  const cache: Record<string, Shift> = {};
 
-  export function byName(name: string): Shift | undefined {
-    if (!byNameCache) {
-      byNameCache = Prelude.makeFindByName(setupStandardShifts());
+  function classify(start: Interval, stop: Interval): Kind {
+    const startsEarly = start.getHours() <= 12;
+    const stopsEarly = stop.getHours() <= 14;
+    if (startsEarly) {
+      if (stopsEarly) {
+        return Kind.Morning;
+      } else {
+        return Kind.WholeDay;
+      }
+    } else {
+      if (stopsEarly) {
+        // This one is tricky...
+        return Kind.WholeDay;
+      } else {
+        return Kind.Afternoon;
+      }
     }
-    return byNameCache(name);
+  }
+
+  export function create(start: Interval, stop: Interval, breakLength: Interval) {
+    const key = start.toString() + "-" + stop.toString() + "-" + breakLength.toString();
+    const maybeRes = cache[key];
+    if (maybeRes === undefined) {
+      const res = { start, stop, breakLength, kind: classify(start, stop) };
+      cache[key] = res;
+      return res;
+    } else {
+      return maybeRes;
+    }
   }
 }

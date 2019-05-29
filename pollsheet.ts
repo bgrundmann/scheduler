@@ -5,8 +5,6 @@ namespace PollSheet {
   interface IPoll {
     employee: string;
     date: Date;
-    start: Date;
-    end: Date;
     shift: Shifts.Shift;
   }
 
@@ -14,18 +12,23 @@ namespace PollSheet {
     const dataRange = sheet.getDataRange().getValues();
     const rows = dataRange.length;
     for (let row = 1; row < rows; row++) {
-      const shift = Prelude.unwrap(Shifts.byName(Values.get(dataRange, row, 4, Values.asString)));
-      f({ employee: Values.get(dataRange, row, 0, Values.asString),
-        date: Values.get(dataRange, row, 1, Values.asDate),
-        start : Values.get(dataRange, row, 2, Values.asDate),
-        end : Values.get(dataRange, row, 3, Values.asDate),
-        shift });
+      const start = Values.get(dataRange, row, 2, Values.asInterval);
+      const end = Values.get(dataRange, row, 3, Values.asInterval);
+      let inferredBreakLength = Interval.zero;
+      if (Interval.diff(end, start).getHours() >= 7) {
+        inferredBreakLength = Interval.hhmm(1, 0);
+      }
+      const shift = Shifts.create(start, end, inferredBreakLength);
+      f({
+        employee: Values.get(dataRange, row, 0, Values.asString),
+        date: Values.get(dataRange, row, 1, Values.asDate), shift,
+      });
     }
   }
 
   // Each employee only once per date and with the longest available shift
   export function forEachUnique(f: (poll: IPoll) => void): void {
-    let last: IPoll|undefined;
+    let last: IPoll | undefined;
     forEach((p) => {
       if (!last || last.employee !== p.employee || !DateUtils.equal(last.date, p.date)) {
         last = p;

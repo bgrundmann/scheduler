@@ -8,8 +8,8 @@ namespace DoodleParser {
     ["Januar", "Februar", "März", "April", "Mai",
       "Juni", "Juli", "August", "September",
       "Oktober", "November", "Dezember"].forEach((name, ndx) => {
-      res[name] = ndx;
-    });
+        res[name] = ndx;
+      });
     return res;
   })();
 
@@ -22,14 +22,14 @@ namespace DoodleParser {
   // Given a row of potentially merged cells, return an array of column and value objects
   // (column being the column of the first cell and value the value in that cell)
   function parseMergedRow(sheet: GoogleAppsScript.Spreadsheet.Sheet,
-                          row: number, column: number, lastColumn: number): ICell[] {
+    row: number, column: number, lastColumn: number): ICell[] {
     const result = [];
     const ranges = sheet.getRange(row, column, 1, lastColumn - column).getMergedRanges();
-    ranges.sort((a, b) => a.getColumn() - b.getColumn() );
+    ranges.sort((a, b) => a.getColumn() - b.getColumn());
     let last = column - 1;
     if (ranges.length === 0) {
       for (let c = last + 1; c <= lastColumn; c++) {
-        result.push( { column : c, lastColumn : c, value : sheet.getRange(row, c).getValue() } );
+        result.push({ column: c, lastColumn: c, value: sheet.getRange(row, c).getValue() });
       }
     }
     // TODO: handle single cells at beginning or end
@@ -37,9 +37,9 @@ namespace DoodleParser {
       // the merged cells aren't in the array returned by getMergedRanges, so
       // we need to get them in another way.
       for (let c = last + 1; c < r.getColumn(); c++) {
-        result.push( { column : c, lastColumn : c, value : sheet.getRange(row, c).getValue() } );
+        result.push({ column: c, lastColumn: c, value: sheet.getRange(row, c).getValue() });
       }
-      result.push( { column : r.getColumn(), lastColumn : r.getLastColumn(), value : r.getValue() } );
+      result.push({ column: r.getColumn(), lastColumn: r.getLastColumn(), value: r.getValue() });
       last = r.getLastColumn();
     });
     return result;
@@ -64,7 +64,7 @@ namespace DoodleParser {
   }
 
   function forEachShift(monthAndYears: any[], days: any[], times: any[],
-                        f: (shift: IShift, column: number) => void): void {
+    f: (shift: IShift, column: number) => void): void {
     let month = 0;
     let day = 0;
     let time = 0;
@@ -106,9 +106,11 @@ namespace DoodleParser {
       const timeStartMinute = Number(r[2]);
       const timeEndHour = Number(r[3]);
       const timeEndMinute = Number(r[4]);
-      f( { year : year2, month : monthValue, day : dayValue,
-        timeStartHour , timeStartMinute ,
-        timeEndHour , timeEndMinute } , column);
+      f({
+        year: year2, month: monthValue, day: dayValue,
+        timeStartHour, timeStartMinute,
+        timeEndHour, timeEndMinute,
+      }, column);
     }
   }
 
@@ -126,30 +128,19 @@ namespace DoodleParser {
       // NOTE: forEachShift column is absolute column on sheet (with 1 being A)
       // But values array is 0 based
       for (const row of values) {
-          const parsedName = row[0].toString();
-          // FIXME: Error handling here
-          if (!(parsedName in employeeDict)) {
-            throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
-          }
-          const name = employeeDict[parsedName].employee;
-          const ok = row[c - 1] === "OK";
-          if (ok) {
-            const date  = new Date(d.year, d.month, d.day);
-            const start = new Date(d.year, d.month, d.day, d.timeStartHour, d.timeStartMinute);
-            const end = new Date(d.year, d.month, d.day, d.timeEndHour, d.timeEndMinute);
-            let shift = null;
-            // FIXME: Replace by something that takes actual times as defined by shifts into account
-            if ((d.timeStartHour === 9 || d.timeStartHour === 10) && d.timeEndHour === 14) {
-              shift = Shifts.byName("Vormittags");
-            } else if ((d.timeStartHour === 9 || d.timeStartHour === 10) && d.timeEndHour > 14) {
-              shift = Shifts.byName("Ganztags");
-            } else if (d.timeStartHour === 13) {
-              shift = Shifts.byName("Nachmittags");
-            } else {
-              throw Error("Don't know how to convert hours into shift");
-            }
-            result.push([name, date, start, end, shift!.name]);
-          }
+        const parsedName = row[0].toString();
+        // FIXME: Error handling here
+        if (!(parsedName in employeeDict)) {
+          throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
+        }
+        const name = employeeDict[parsedName].employee;
+        const ok = row[c - 1] === "OK";
+        if (ok) {
+          const date = new Date(d.year, d.month, d.day);
+          const start = Interval.hhmm(d.timeStartHour, d.timeStartMinute);
+          const end = Interval.hhmm(d.timeEndHour, d.timeEndMinute);
+          result.push([name, date, start.toHHMM(), end.toHHMM()]);
+        }
       }
     });
     const data = SheetUtils.createOrClearSheetByName("UmfrageAlsTabelle");
@@ -158,10 +149,14 @@ namespace DoodleParser {
     data.getRange(1, 1, 1, 5).setFontWeight("bold");
     if (result.length > 0) {
       data.getRange(2, 1, result.length, result[0].length)
-      .setValues(result)
-      .sort([{column: 2, ascending: true}, {column: 1, ascending: true}, {column: 5, ascending: true}]);
+        .setValues(result)
+        .sort([
+          { column: 2, ascending: true },
+          { column: 1, ascending: true },
+          { column: 3, ascending: true },
+          { column: 4, ascending: true }]);
     }
-    data.getRange(2, 3, result.length, 2).setNumberFormat("hh:mm");
+    data.getRange(2, 3, result.length, 2).setNumberFormat("[hh]:mm");
   }
 }
 
