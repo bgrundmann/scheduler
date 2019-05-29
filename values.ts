@@ -33,9 +33,12 @@ namespace Values {
     throw new ValueConversionError("number", v);
   }
 
+  // See https://stackoverflow.com/questions/17715841/how-to-read-the-correct-time-values-from-google-spreadsheet
+  const spreadSheetEpoch = new Date("Dec 30, 1899 00:00:00");
+
   export function asInterval(v: unknown): Interval {
     if (v instanceof Date) {
-      return Interval.ofMilliSeconds(v.getTime());
+      return Interval.ofMilliSeconds(v.getTime() - spreadSheetEpoch.getTime());
     }
     throw new ValueConversionError("Interval", v);
   }
