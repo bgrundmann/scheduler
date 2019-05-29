@@ -10,11 +10,15 @@ namespace Shifts {
     return ["Vormittags", "Nachmittags", "Ganztags"][k];
   }
 
-  export interface Shift {
-    start: Interval;
-    stop: Interval;
-    breakLength: Interval;
-    kind: Kind;
+  export class Shift {
+    constructor(public readonly start: Interval,
+      public readonly stop: Interval,
+      public readonly breakLength: Interval,
+      public readonly kind: Kind) { }
+
+    public toString() {
+      return this.start.toHHMM() + "-" + this.stop.toHHMM();
+    }
   }
 
   // Sadly prelude can not be used during the init of module Shifts
@@ -32,24 +36,6 @@ namespace Shifts {
       ]);
     }
     return compareF(a, b);
-  }
-
-  function setupStandardShifts(): Shift[] {
-    const firstHalf: Shift = {
-      start: Interval.hhmm(10, 0), stop: Interval.hhmm(14, 0), breakLength: Interval.zero,
-      kind: Kind.Morning,
-    };
-    const secondHalf: Shift = {
-      start: Interval.hhmm(13, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.zero,
-      kind: Kind.Afternoon,
-    };
-    const whole: Shift = {
-      start: Interval.hhmm(10, 0), stop: Interval.hhmm(19, 0), breakLength: Interval.hhmm(1, 0),
-      kind: Kind.WholeDay,
-    };
-    const all = // in the order they appear on the data sheet
-      [firstHalf, secondHalf, whole];
-    return all;
   }
 
   const cache: Record<string, Shift> = {};
@@ -73,11 +59,11 @@ namespace Shifts {
     }
   }
 
-  export function create(start: Interval, stop: Interval, breakLength: Interval) {
+  export function create(start: Interval, stop: Interval, breakLength: Interval): Shift {
     const key = start.toString() + "-" + stop.toString() + "-" + breakLength.toString();
     const maybeRes = cache[key];
     if (maybeRes === undefined) {
-      const res = { start, stop, breakLength, kind: classify(start, stop) };
+      const res = new Shift(start, stop, breakLength, classify(start, stop));
       cache[key] = res;
       return res;
     } else {
