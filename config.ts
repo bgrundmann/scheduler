@@ -17,11 +17,22 @@ namespace Shifts {
     kind: Kind;
   }
 
-  export const compare = Prelude.lexiographic([
-    Prelude.compareBy((s: Shift) => s.start, Interval.compare),
-    Prelude.compareBy((s: Shift) => s.stop, Interval.compare),
-    Prelude.compareBy((s: Shift) => s.breakLength, Interval.compare),
-  ]);
+  // Sadly prelude can not be used during the init of module Shifts
+  // because of module evaluation order.  So this sadness to cause
+  // a dependency on prelude only after evaluation has happened
+
+  let compareF: Prelude.Comparator<Shift> | undefined;
+
+  export function compare(a: Shift, b: Shift) {
+    if (compareF === undefined) {
+      compareF = Prelude.lexiographic([
+        Prelude.compareBy((s: Shift) => s.start, Interval.compare),
+        Prelude.compareBy((s: Shift) => s.stop, Interval.compare),
+        Prelude.compareBy((s: Shift) => s.breakLength, Interval.compare),
+      ]);
+    }
+    return compareF(a, b);
+  }
 
   function setupStandardShifts(): Shift[] {
     const firstHalf: Shift = {
