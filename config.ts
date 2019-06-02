@@ -52,6 +52,7 @@ namespace Shifts {
     } else {
       if (stopsEarly) {
         // This one is tricky...
+        Logger.log("In the tricky case: %s - %s", start.getHours(), stop.getHours())
         return Kind.WholeDay;
       } else {
         return Kind.Afternoon;

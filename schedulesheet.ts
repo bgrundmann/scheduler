@@ -1,4 +1,5 @@
 /** @OnlyCurrentDoc */
+
 /** The schedule sheet draws one box per place, each box being subdivided into 3 cells
  * one for each of the standard slots.
  * NOTE: There is a tricky dependency between forEach here and in dataSheet.  In particular
@@ -177,7 +178,6 @@ namespace ScheduleSheet {
     DataSheet.forEach((entry: Entry.IEntry) => {
       if (DateUtils.inRangeInclusive(entry.date, dateRange().from, dateRange().until)) {
         const cell = slotToCell(entry);
-        Logger.log("placing %s at %s", entry, cell);
         data[cell.row - FIRST_ENTRY_ROW][cell.column - FIRST_ENTRY_COLUMN] = layoutEntry(entry);
       }
     });
@@ -364,12 +364,16 @@ namespace ScheduleSheet {
       Prelude.forEachAsList(DataSheet.forEach, ((e) => DateUtils.inRangeInclusive(e.date, dr.from, dr.until)));
     const schedule =
       Prelude.forEachAsList(forEachEntry);
-    /*
+    /* UNCOMMENT TO DEBUG
     for (let i = 0; i < Math.min(schedule.length, Math.min(data.length, 4)); i++) {
-      Logger.log("%s: %s %s %s VS %s %s %s", i, data[i].date, data[i].location.name, data[i].shift.toString(),
-        schedule[i].date, schedule[i].location.name, schedule[i].shift.toString());
+      if (DateUtils.equal(data[i].date, schedule[i].date) && data[i].location.name === schedule[i].location.name) {
+        Logger.log("%s %s %s: %s VS %s", i, data[i].date, data[i].location.name, data[i].shift.toString(),
+          schedule[i].shift.toString());
+      } else {
+        Logger.log("%s: %s %s %s VS %s %s %s", i, data[i].date, data[i].location.name, data[i].shift.toString(),
+          schedule[i].date, schedule[i].location.name, schedule[i].shift.toString());
+      }
     }
-    return [];
     */
     let d = 0;
     let s = 0;
