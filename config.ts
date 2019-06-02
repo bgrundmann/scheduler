@@ -21,9 +21,9 @@ namespace Shifts {
     }
   }
 
-  // Sadly prelude can not be used during the init of module Shifts
-  // because of module evaluation order.  So this sadness to cause
-  // a dependency on prelude only after evaluation has happened
+  // Sadly prelude can not be used during the init of module Config
+  // because of module evaluation order.  So this sadness is here to delay
+  // the dependency on prelude after that module is properly initialized
 
   let compareF: Prelude.Comparator<Shift> | undefined;
 
