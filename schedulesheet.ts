@@ -364,6 +364,13 @@ namespace ScheduleSheet {
       Prelude.forEachAsList(DataSheet.forEach, ((e) => DateUtils.inRangeInclusive(e.date, dr.from, dr.until)));
     const schedule =
       Prelude.forEachAsList(forEachEntry);
+    /*
+    for (let i = 0; i < Math.min(schedule.length, Math.min(data.length, 4)); i++) {
+      Logger.log("%s: %s %s %s VS %s %s %s", i, data[i].date, data[i].location.name, data[i].shift.toString(),
+        schedule[i].date, schedule[i].location.name, schedule[i].shift.toString());
+    }
+    return [];
+    */
     let d = 0;
     let s = 0;
     while (d < data.length && s < schedule.length) {
@@ -416,6 +423,7 @@ namespace ScheduleSheet {
         employeesData: data[d].employees,
         employeesSchedule: [],
       };
+      d++;
       result.push(diffLt);
     }
     while (s < schedule.length) {
@@ -426,6 +434,7 @@ namespace ScheduleSheet {
         employeesData: [],
         employeesSchedule: schedule[s].employees,
       };
+      s++;
       result.push(diffGt);
     }
     return result;
@@ -521,6 +530,7 @@ function testCompare() {
   const result = ScheduleSheet.compareWithDataSheet();
   Logger.log("diffs: %s", result.length);
   for (let i = 0; i < Math.min(result.length, 4); i++) {
-    Logger.log("diff: %s", result[i]);
+    Logger.log("diff %s %s %s: %s VS %s", result[i].date, result[i].shift.toString(), result[i].location,
+      result[i].employeesData, result[i].employeesSchedule);
   }
 }

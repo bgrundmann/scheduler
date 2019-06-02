@@ -20,7 +20,7 @@
 namespace Main {
   export function onOpenCallback() {
     Logger.clear();
-    ScheduleSheet.syncScheduleToData();
+    // ScheduleSheet.syncScheduleToData();
   }
   export function changeDates() {
     // make sure everything is saved first.
