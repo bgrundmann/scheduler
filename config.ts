@@ -4,17 +4,23 @@ namespace Config {
 }
 
 namespace Shifts {
-  export const enum Kind { Morning, Afternoon, WholeDay }
+  export const enum Kind {
+    Morning,
+    Afternoon,
+    WholeDay,
+  }
 
   export function germanNameOfKind(k: Kind): string {
     return ["Vormittags", "Nachmittags", "Ganztags"][k];
   }
 
   export class Shift {
-    constructor(public readonly start: Interval,
+    constructor(
+      public readonly start: Interval,
       public readonly stop: Interval,
       public readonly breakLength: Interval,
-      public readonly kind: Kind) { }
+      public readonly kind: Kind
+    ) {}
 
     public toString() {
       return this.start.toHHMM() + "-" + this.stop.toHHMM();
@@ -52,7 +58,11 @@ namespace Shifts {
     } else {
       if (stopsEarly) {
         // This one is tricky...
-        Logger.log("In the tricky case: %s - %s", start.getHours(), stop.getHours())
+        Logger.log(
+          "In the tricky case: %s - %s",
+          start.getHours(),
+          stop.getHours()
+        );
         return Kind.WholeDay;
       } else {
         return Kind.Afternoon;
@@ -60,8 +70,13 @@ namespace Shifts {
     }
   }
 
-  export function create(start: Interval, stop: Interval, breakLength: Interval): Shift {
-    const key = start.toString() + "-" + stop.toString() + "-" + breakLength.toString();
+  export function create(
+    start: Interval,
+    stop: Interval,
+    breakLength: Interval
+  ): Shift {
+    const key =
+      start.toString() + "-" + stop.toString() + "-" + breakLength.toString();
     const maybeRes = cache[key];
     if (maybeRes === undefined) {
       const res = new Shift(start, stop, breakLength, classify(start, stop));

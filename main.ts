@@ -20,15 +20,19 @@
 namespace Main {
   export function onOpenCallback() {
     Logger.clear();
-    // ScheduleSheet.syncScheduleToData();
+    ScheduleSheet.syncScheduleToData();
   }
   export function changeDates() {
     // make sure everything is saved first.
     ScheduleSheet.syncScheduleToData();
     const fromDate = SheetUtils.askForDate("Von");
-    if (!fromDate) { return; }
+    if (!fromDate) {
+      return;
+    }
     const untilDate = SheetUtils.askForDate("Bis");
-    if (!untilDate) { return; }
+    if (!untilDate) {
+      return;
+    }
     ScheduleSheet.setup(fromDate, untilDate);
   }
   export function parseDoodle() {
@@ -38,9 +42,15 @@ namespace Main {
     ScheduleSheet.syncScheduleToData();
     const range = ScheduleSheet.dateRange();
     const whoAndWhere = ScheduleSheet.employeesAndLocations();
-    const entriesToPlace = Prelude.forEachAsList(PollSheet.forEachUnique, (p) => {
-      return whoAndWhere[p.employee] && DateUtils.inRangeInclusive(p.date, range.from, range.until);
-    });
+    const entriesToPlace = Prelude.forEachAsList(
+      PollSheet.forEachUnique,
+      (p) => {
+        return (
+          whoAndWhere[p.employee] &&
+          DateUtils.inRangeInclusive(p.date, range.from, range.until)
+        );
+      }
+    );
     const entries: Entry.IEntry[] = entriesToPlace.map((ps) => {
       return {
         employees: [ps.employee],
@@ -82,10 +92,13 @@ function zeitraumAendernCallback() {
 }
 
 function doodleEinlesenCallback() {
-  if (SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Umfrage") === null) {
-    SpreadsheetApp.getUi()
-      .alert("Zuerst den doodle in dieses spreadsheet importieren" +
-        " (Datei -> Importieren (WICHTIG: Neues Tabellenblatt einfuegen!))");
+  if (
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Umfrage") === null
+  ) {
+    SpreadsheetApp.getUi().alert(
+      "Zuerst den doodle in dieses spreadsheet importieren" +
+        " (Datei -> Importieren (WICHTIG: Neues Tabellenblatt einfuegen!))"
+    );
     return;
   }
   Main.parseDoodle();
@@ -112,13 +125,18 @@ function onOpen() {
     .addItem("Doodle einlesen", "doodleEinlesenCallback")
     .addSeparator()
     .addItem("Sicherheitskopie erstellen", "sicherheitskopieErstellenCallback")
-    .addItem("Sicherheitskopie wiederherstellen!", "sicherheitskopieWiederherstellenCallback")
+    .addItem(
+      "Sicherheitskopie wiederherstellen!",
+      "sicherheitskopieWiederherstellenCallback"
+    )
     .addToUi();
   Main.onOpenCallback();
 }
 
 function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit) {
+  Logger.log("onEdit start");
   Main.onEditCallback(e);
+  Logger.log("onEdit stop");
 }
 
 function initialSetup1() {

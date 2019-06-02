@@ -25,7 +25,9 @@ namespace DataSheet {
 
   export function clear(): void {
     if (sheet.getLastRow() > 1) {
-      sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clear();
+      sheet
+        .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
+        .clear();
     }
   }
 
@@ -35,13 +37,21 @@ namespace DataSheet {
       const worktime = Interval.diff(wallclocktime, l.shift.breakLength);
       const kind = Shifts.germanNameOfKind(l.shift.kind);
 
-      return [l.date, l.employee, l.location.name, kind,
-      l.shift.start.toHHMM(), l.shift.stop.toHHMM(), l.shift.breakLength.toHHMM(),
-      worktime.getTotalMinutes(),
+      return [
+        l.date,
+        l.employee,
+        l.location.name,
+        kind,
+        l.shift.start.toHHMM(),
+        l.shift.stop.toHHMM(),
+        l.shift.breakLength.toHHMM(),
+        worktime.getTotalMinutes(),
       ];
     });
     if (values.length > 0) {
-      sheet.getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
+      sheet
+        .getRange(sheet.getLastRow() + 1, 1, values.length, values[0].length)
+        .setValues(values);
 
       // Make sure the whole sheet is still correctly sorted
       const allData = sheet.getDataRange();
@@ -60,21 +70,28 @@ namespace DataSheet {
   }
 
   /** Add additional entries, keeps the worksheet sorted.  Any existing entries on the same
-   * slot are merged as well as any in the input.
+   * slot are merged as well as any in the input.  Handles empty entries correctly.
    */
   export function add(entries: Entry.IEntry[]): void {
     addLines(Prelude.flattenArray(entries.map(entryToLines)));
   }
 
   /// Remove all entries with matching values
-  export function removeMatching(date: Date, locationName: string, shiftKind: Shifts.Kind): void {
+  export function removeMatching(
+    date: Date,
+    locationName: string,
+    shiftKind: Shifts.Kind
+  ): void {
     // Given the sorting (see append), all relevant rows will be consecutive
     const allData = sheet.getDataRange();
     const withoutHeader = allData.offset(1, 0, allData.getNumRows() - 1);
     const data = withoutHeader.getValues();
     function matches(row: any[]) {
-      return (DateUtils.equal(Values.asDate(row[0]), date) &&
-        row[2] === locationName && row[3] === Shifts.germanNameOfKind(shiftKind));
+      return (
+        DateUtils.equal(Values.asDate(row[0]), date) &&
+        row[2] === locationName &&
+        row[3] === Shifts.germanNameOfKind(shiftKind)
+      );
     }
     let firstRow = 0;
     while (firstRow < data.length && !matches(data[firstRow])) {
@@ -105,15 +122,21 @@ namespace DataSheet {
       const shiftStop = Values.asInterval(row[5]);
       const shiftBreakLength = Values.asInterval(row[6]);
       const location = Prelude.unwrap(Locations.byName(locationName));
-      const shift = Prelude.unwrap(Shifts.create(shiftStart, shiftStop, shiftBreakLength));
+      const shift = Prelude.unwrap(
+        Shifts.create(shiftStart, shiftStop, shiftBreakLength)
+      );
       f({ date, employee, location, shift });
     });
   }
 
-  export function replaceRange(fromDate: Date, toDate: Date, entries: Entry.IEntry[]): void {
+  export function replaceRange(
+    fromDate: Date,
+    toDate: Date,
+    entries: Entry.IEntry[]
+  ): void {
     const existingOutsideRange: Line[] = [];
     forEachLine((l) => {
-      if (!(DateUtils.inRangeInclusive(l.date, fromDate, toDate))) {
+      if (!DateUtils.inRangeInclusive(l.date, fromDate, toDate)) {
         existingOutsideRange.push(l);
       }
     });
@@ -126,12 +149,22 @@ namespace DataSheet {
     let cur: Entry.IEntry | undefined;
     forEachLine((l: Line) => {
       if (cur === undefined) {
-        cur = { date: l.date, location: l.location, shift: l.shift, employees: [l.employee] };
+        cur = {
+          date: l.date,
+          location: l.location,
+          shift: l.shift,
+          employees: [l.employee],
+        };
       } else if (Entry.sameSlot(cur, l)) {
         cur.employees.push(l.employee);
       } else {
         f(cur);
-        cur = { date: l.date, location: l.location, shift: l.shift, employees: [l.employee] };
+        cur = {
+          date: l.date,
+          location: l.location,
+          shift: l.shift,
+          employees: [l.employee],
+        };
       }
     });
     if (cur !== undefined) {

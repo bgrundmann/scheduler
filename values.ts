@@ -43,8 +43,12 @@ namespace Values {
     throw new ValueConversionError("Interval", v);
   }
 
-  export function get<E>(values: unknown[][],
-    row: number, col: number, conv: (x: unknown) => E): E {
+  export function get<E>(
+    values: unknown[][],
+    row: number,
+    col: number,
+    conv: (x: unknown) => E
+  ): E {
     try {
       return conv(values[row][col]);
     } catch (e) {
