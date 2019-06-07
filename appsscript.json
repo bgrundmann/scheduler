@@ -2,20 +2,5 @@
   "timeZone": "Europe/Berlin",
   "dependencies": {
   },
-  "exceptionLogging": "STACKDRIVER",
-  "sheets": {
-    "macros": [{
-      "menuName": "SetupSheet",
-      "functionName": "SetupSheet"
-    }, {
-      "menuName": "format",
-      "functionName": "format"
-    }, {
-      "menuName": "format",
-      "functionName": "format"
-    }, {
-      "menuName": "sorting",
-      "functionName": "sorting"
-    }]
-  }
+  "exceptionLogging": "STACKDRIVER"
 }

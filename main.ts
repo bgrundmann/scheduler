@@ -1,153 +1,1163 @@
-/** @OnlyCurrentDoc */
 // TODO:
-//   - Write something to print
-//   - Write something to calendarize
-//   - Add config page with list of employees and their powers
-//   - Figure out how to deploy this properly
-//     Core idea: deploy as sheet with bound script (but develop using typescript and clasp)
-//     Deploy by making named copies of the sheet.
-//     Debug by making backups and exporting that sheet
-//   - Write something to make shifts that are not in the doodle bold
-//   - Split Daten into Focus and History
-//   - Add column to show special dates (maybe by subscribing to a calendar?)
-//   - Make cells that are completely empty red
-//   - more clever doodle -> schedule rules
-//   - doodle box?
-//   - Samstags sind nur 6 stunden
-//     Anfang: 9:45, ende: 1900.  Samstags ende: 1600.  Sonntags: 13:00 - 18:00 (aber mal 1.5)
-//   - Wie sollte man schulungen verrechnen?
-//
-namespace Main {
-  export function onOpenCallback() {
-    Logger.clear();
-    ScheduleSheet.syncScheduleToData();
+// - Add doodle parser functionality (into doodle column)
+// - Use schedulecount to parse the doodle after its placed in the doodle
+// - Use that to highlight "problems"
+
+function flatten<T>(a: T[][]): T[] {
+  const empty: T[] = [];
+  return empty.concat(...a);
+}
+
+namespace DateUtils {
+  export function copy(d: Date): Date {
+    return new Date(d.getTime());
   }
-  export function changeDates() {
-    // make sure everything is saved first.
-    ScheduleSheet.syncScheduleToData();
-    const fromDate = SheetUtils.askForDate("Von");
-    if (!fromDate) {
-      return;
+  export function nextDay(d: Date): Date {
+    const c = copy(d);
+    c.setDate(d.getDate() + 1);
+    return c;
+  }
+  /// Add the given number of days
+  export function addDays(d: Date, n: number): Date {
+    const c = copy(d);
+    c.setDate(d.getDate() + n);
+    return c;
+  }
+  export function isWeekend(d: Date): boolean {
+    const w = d.getDay();
+    return w === 6 || w === 0;
+  }
+  /// Monday is 0, Tuesday 1, ... Sunday is 6
+  export function dayOfWeekStartingMonday(d: Date): number {
+    const w = d.getDay();
+    if (w === 0) {
+      return 6;
+    } else {
+      return w - 1;
     }
-    const untilDate = SheetUtils.askForDate("Bis");
-    if (!untilDate) {
-      return;
+  }
+  function truncToDay(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  /** Compare the passed in Date objects as Dates (independently of timezone and
+   * ignoring anything with finer granularity than a day).
+   */
+  export function inRangeInclusive(d: Date, low: Date, upp: Date): boolean {
+    const dt = truncToDay(d);
+    const lt = truncToDay(low);
+    const ut = truncToDay(upp);
+    return lt.getTime() <= dt.getTime() && dt.getTime() <= ut.getTime();
+  }
+  /** Compare the passed in Date objects as Dates (independently of timezone
+   * and ignoring anything with finer granularity than a day).
+   */
+  export function equal(d1: Date, d2: Date): boolean {
+    return truncToDay(d1).getTime() === truncToDay(d2).getTime();
+  }
+
+  /** Call f once for each day in the range lower - upper (inclusive).
+   */
+  export function forEachDay(
+    lower: Date,
+    upper: Date,
+    f: (d: Date, counter: number) => void
+  ): void {
+    let d = lower;
+    let n = 0;
+    while (d <= upper) {
+      f(d, n);
+      n++;
+      d = nextDay(d);
     }
-    ScheduleSheet.setup(fromDate, untilDate);
   }
-  export function parseDoodle() {
-    DoodleParser.parse();
+  export function mondayStartingWeekContaining(d: Date): Date {
+    const res = copy(d);
+    while (res.getDay() !== 1) {
+      res.setDate(res.getDate() - 1);
+    }
+    return res;
   }
-  export function employeesFromDoodleToSchedule() {
-    ScheduleSheet.syncScheduleToData();
-    const range = ScheduleSheet.dateRange();
-    const whoAndWhere = ScheduleSheet.employeesAndLocations();
-    const entriesToPlace = Prelude.forEachAsList(
-      PollSheet.forEachUnique,
-      (p) => {
-        return (
-          whoAndWhere[p.employee] &&
-          DateUtils.inRangeInclusive(p.date, range.from, range.until)
-        );
-      }
+  export function diff(bigger: Date, smaller: Date): number {
+    return Math.round(
+      (bigger.getTime() - smaller.getTime()) / (1000 * 60 * 60 * 24)
     );
-    const entries: Entry.IEntry[] = entriesToPlace.map((ps) => {
-      return {
-        employees: [ps.employee],
-        date: ps.date,
-        location: Prelude.unwrap(whoAndWhere[ps.employee].location),
-        shift: ps.shift,
-      };
+  }
+  const isoRegex = /\d{4}-\d{2}-\d{2}/;
+
+  /*** Parse a date in extended iso format */
+  export function parseISODate(s: string): Date | undefined {
+    const r = isoRegex.exec(s);
+    if (r !== null) {
+      return new Date(s);
+    }
+    return undefined;
+  }
+}
+
+namespace DoodleParser {
+  // TODO: parse the year from the sheet
+  const year = 2019;
+
+  const germanMonthNames = (() => {
+    const res: Record<string, number> = {};
+    [
+      "Januar",
+      "Februar",
+      "März",
+      "April",
+      "Mai",
+      "Juni",
+      "Juli",
+      "August",
+      "September",
+      "Oktober",
+      "November",
+      "Dezember",
+    ].forEach((name, ndx) => {
+      res[name] = ndx;
     });
-    DataSheet.add(entries);
-    ScheduleSheet.setup(range.from, range.until);
+    return res;
+  })();
+
+  interface ICell {
+    column: number;
+    lastColumn: number;
+    value: any;
   }
-  export function backup() {
-    ScheduleSheet.syncScheduleToData();
-    SheetUtils.backupSheet("Daten", "Backup");
-    SheetUtils.backupSheet("Notizen", "Backup-Notizen");
-  }
-  export function restore() {
-    SheetUtils.restoreSheet("Backup-Notizen", "Notizen");
-    if (!SheetUtils.restoreSheet("Backup", "Daten")) {
-      const ui = SpreadsheetApp.getUi();
-      ui.alert("Kein Backup vorhanden!");
+
+  // Given a row of potentially merged cells, return an array of column and value objects
+  // (column being the column of the first cell and value the value in that cell)
+  function parseMergedRow(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    row: number,
+    column: number,
+    lastColumn: number
+  ): ICell[] {
+    const result = [];
+    const ranges = sheet
+      .getRange(row, column, 1, lastColumn - column)
+      .getMergedRanges();
+    ranges.sort((a, b) => a.getColumn() - b.getColumn());
+    let last = column - 1;
+    if (ranges.length === 0) {
+      for (let c = last + 1; c <= lastColumn; c++) {
+        result.push({
+          column: c,
+          lastColumn: c,
+          value: sheet.getRange(row, c).getValue(),
+        });
+      }
     }
-    const r = ScheduleSheet.dateRange();
-    ScheduleSheet.setup(r.from, r.until);
+    // TODO: handle single cells at beginning or end
+    ranges.forEach((r) => {
+      // the merged cells aren't in the array returned by getMergedRanges, so
+      // we need to get them in another way.
+      for (let c = last + 1; c < r.getColumn(); c++) {
+        result.push({
+          column: c,
+          lastColumn: c,
+          value: sheet.getRange(row, c).getValue(),
+        });
+      }
+      result.push({
+        column: r.getColumn(),
+        lastColumn: r.getLastColumn(),
+        value: r.getValue(),
+      });
+      last = r.getLastColumn();
+    });
+    return result;
   }
-  export function onEditCallback(e: GoogleAppsScript.Events.SheetsOnEdit) {
-    switch (e.range.getSheet().getName()) {
-      case ScheduleSheet.NAME:
-        ScheduleSheet.onEditCallback(e);
-        break;
-      default:
-        Logger.log("No callback for this sheet");
+
+  function betweenInclusive(x: number, low: number, high: number) {
+    return low <= x && x <= high;
+  }
+
+  const monthAndYearRegex = /^([^ ]+) ([0-9]+)$/;
+  const timeRegex = /^([0-9]+):([0-9]+) – ([0-9]+):([0-9]+)$/;
+  const dayRegex = /^([^ ]+) ([0-9]+)$/;
+
+  interface IShift {
+    year: number;
+    month: number;
+    day: number;
+    timeStartHour: number;
+    timeStartMinute: number;
+    timeEndHour: number;
+    timeEndMinute: number;
+  }
+
+  function forEachShift(
+    monthAndYears: any[],
+    days: any[],
+    times: any[],
+    f: (shift: IShift, column: number) => void
+  ): void {
+    let month = 0;
+    let day = 0;
+    let time = 0;
+    const lastColumn = monthAndYears[monthAndYears.length - 1].lastColumn;
+
+    for (let column = monthAndYears[0].column; column <= lastColumn; column++) {
+      Logger.log(
+        "[1] column = %s, month = %s (%s), day = %s (%s), time = %s (%s)",
+        column,
+        month,
+        monthAndYears[month],
+        day,
+        days[day],
+        time,
+        times[time]
+      );
+      if (
+        !betweenInclusive(
+          column,
+          monthAndYears[month].column,
+          monthAndYears[month].lastColumn
+        )
+      ) {
+        month++;
+      }
+      if (!betweenInclusive(column, days[day].column, days[day].lastColumn)) {
+        day++;
+      }
+      if (
+        !betweenInclusive(column, times[time].column, times[time].lastColumn)
+      ) {
+        time++;
+      }
+      Logger.log(
+        "[2] column = %s, month = %s (%s), day = %s (%s), time = %s (%s)",
+        column,
+        month,
+        monthAndYears[month],
+        day,
+        days[day],
+        time,
+        times[time]
+      );
+      let r = monthAndYearRegex.exec(monthAndYears[month].value);
+      if (r == null) {
+        throw Error("Failed to parse month and year in doodle");
+      }
+      const monthValue = germanMonthNames[r[1]];
+      const year2 = Number(r[2]);
+
+      r = dayRegex.exec(days[day].value);
+      if (r == null) {
+        throw Error("Failed to parse day in doodle");
+      }
+      const dayValue = Number(r[2]);
+
+      // Parser would be more robust if this lookup failed with an error message as well
+      r = timeRegex.exec(times[time].value);
+      if (r == null) {
+        throw Error("Failed to parse time in doodle");
+      }
+      const timeStartHour = Number(r[1]);
+      const timeStartMinute = Number(r[2]);
+      const timeEndHour = Number(r[3]);
+      const timeEndMinute = Number(r[4]);
+      f(
+        {
+          year: year2,
+          month: monthValue,
+          day: dayValue,
+          timeStartHour,
+          timeStartMinute,
+          timeEndHour,
+          timeEndMinute,
+        },
+        column
+      );
     }
+  }
+
+  export interface Entry {
+    employee: string;
+    date: Date;
+    start: number;
+    stop: number;
+  }
+
+  export function parse(): Entry[] {
+    const ss = SpreadsheetApp.getActive();
+    const doodle = ss.getSheetByName("Umfrage");
+    const employeeDict = EmployeeSheet.get();
+    const monthAndYears = parseMergedRow(doodle, 4, 2, doodle.getLastColumn());
+    const days = parseMergedRow(doodle, 5, 2, doodle.getLastColumn());
+    const times = parseMergedRow(doodle, 6, 2, doodle.getLastColumn());
+
+    const values = doodle
+      .getRange(7, 1, doodle.getLastRow() - 7 - 2, doodle.getLastColumn() - 1)
+      .getValues();
+    const result: Entry[] = [];
+    forEachShift(monthAndYears, days, times, (d, c) => {
+      // NOTE: forEachShift column is absolute column on sheet (with 1 being A)
+      // But values array is 0 based
+      for (const row of values) {
+        const parsedName = row[0].toString();
+        // FIXME: Error handling here
+        if (!(parsedName in employeeDict)) {
+          throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
+        }
+        const employee = employeeDict[parsedName].handle;
+        const ok = row[c - 1] === "OK";
+        if (ok) {
+          const date = new Date(d.year, d.month, d.day);
+          const start = d.timeStartHour * 60 + d.timeStartMinute;
+          const stop = d.timeEndHour * 60 + d.timeEndMinute;
+          result.push({ employee, date, start, stop });
+        }
+      }
+    });
+    return result;
   }
 }
 
-function zeitraumAendernCallback() {
-  Main.changeDates();
-}
+namespace SlotParser {
+  /** A slot contains a list of items. */
+  export type Item =
+    | { kind: "default"; name: string }
+    | {
+        kind: "specified";
+        name: string;
+        start: number;
+        stop: number;
+        duration: number;
+      };
 
-function doodleEinlesenCallback() {
-  if (
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Umfrage") === null
-  ) {
-    SpreadsheetApp.getUi().alert(
-      "Zuerst den doodle in dieses spreadsheet importieren" +
-        " (Datei -> Importieren (WICHTIG: Neues Tabellenblatt einfuegen!))"
+  const shortOfDayRegex = RegExp("^[0-9]{1,2}$");
+  const ofDayRegex = RegExp("^([0-9]{1,2}):([0-9]{2})$");
+
+  /** Parse a time of day and return it as minutes since midnight.
+   * Understood formats:
+   * hh (0 - 23, with optional leading 0)
+   * hh:mm
+   *
+   * Returns undefined if the string couldn't be parsed.
+   */
+  function parseTimeOfDay(s: string): number | undefined {
+    const m1 = shortOfDayRegex.exec(s);
+    if (m1 !== null) {
+      return Number(s) * 60;
+    }
+    const m2 = ofDayRegex.exec(s);
+    if (m2 !== null) {
+      return Number(m2[1]) * 60 + Number(m2[2]);
+    }
+    return undefined;
+  }
+
+  /** Parse a time range and return start time, stop time (in minutes since midnight) and
+   * duration (in minutes).
+   */
+  function parseTimeRange(
+    s: string
+  ): { start: number; stop: number; duration: number } | undefined {
+    const parts = s.split("-");
+    if (parts.length !== 2) {
+      return undefined;
+    }
+    const start = parseTimeOfDay(parts[0]);
+    const stop = parseTimeOfDay(parts[1]);
+    if (start !== undefined && stop !== undefined) {
+      return { start, stop, duration: stop - start };
+    }
+    return undefined;
+  }
+
+  function parseItem(s: string): Item {
+    const m = s.split(" ");
+    if (m.length === 2) {
+      const range = parseTimeRange(m[1]);
+      if (range === undefined) {
+        throw Error(`Verstehe die angegebene Zeitspanne ${m[1]} nicht`);
+      }
+      return {
+        kind: "specified",
+        name: m[0],
+        ...range,
+      };
+    } else {
+      return { kind: "default", name: s };
+    }
+  }
+
+  /** Parse the value of a slot. Throws an error if the input is invalid. */
+  export function parse(slot: string): Item[] {
+    const employees = slot
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+    return employees.map((e) => parseItem(e));
+  }
+
+  /** Given the textual representation of a slot remove all occurrences of any
+   * of the given employees.
+   */
+  export function removeEmployees(slot: string, employees: string[]): string {
+    const names = employees.join("|");
+    const interestingItemRegex = RegExp(
+      `(\\b(${names})\\b( +[0-9-:]+)? *,?)`,
+      "g"
     );
-    return;
+    Logger.log("%s on %s", interestingItemRegex, slot);
+    const res = slot.replace(interestingItemRegex, "").trim();
+    if (res.length > 0 && res[res.length - 1] === ",") {
+      return res.substr(0, res.length - 1);
+    } else {
+      return res;
+    }
   }
-  Main.parseDoodle();
 }
 
-function mitarbeiterUebertragenCallback() {
-  Main.employeesFromDoodleToSchedule();
+namespace SheetUtils {
+  export function autoResizeColumns(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    startColumn: number,
+    numColumns: number,
+    minWidthPixels?: number
+  ) {
+    sheet.autoResizeColumns(startColumn, numColumns);
+    if (minWidthPixels) {
+      for (let c = startColumn; c < startColumn + numColumns; c++) {
+        if (sheet.getColumnWidth(c) < minWidthPixels) {
+          sheet.setColumnWidth(c, minWidthPixels);
+        }
+      }
+    }
+  }
 }
 
-function sicherheitskopieErstellenCallback() {
-  Main.backup();
+namespace Locations {
+  export interface Location {
+    name: string;
+    ndx: number;
+  }
+
+  const theList: Location[] = [
+    { name: "Ammergasse" },
+    { name: "Buero" },
+    { name: "Marktgasse" },
+    { name: "Online" },
+  ].map((e, ndx) => ({ ndx, ...e }));
+
+  const doodle: Location[] = [{ name: "Doodle", ndx: theList.length }];
+
+  const theListWithDoodle: Location[] = theList.concat(doodle);
+
+  export function all(
+    mode: "include-doodle" | "exclude-doodle" | "only-doodle"
+  ): Location[] {
+    switch (mode) {
+      case "include-doodle":
+        return theListWithDoodle;
+      case "exclude-doodle":
+        return theList;
+      case "only-doodle":
+        return doodle;
+    }
+  }
 }
 
-function sicherheitskopieWiederherstellenCallback() {
-  Main.restore();
+namespace EmployeeSheet {
+  function getSheet(): GoogleAppsScript.Spreadsheet.Sheet {
+    return SpreadsheetApp.getActive().getSheetByName("Mitarbeiter");
+  }
+
+  /** Copy list of employees from employees sheet to the given Range.
+   * Returns the number of employees.
+   */
+  export function copyEmployees(
+    dst: GoogleAppsScript.Spreadsheet.Range,
+    transposed?: "transposed"
+  ): number {
+    const trueIfTransposed = transposed !== undefined;
+    const employeeSheet = getSheet();
+    // TODO: check if copyTo is the function to use.
+    const src = employeeSheet.getRange(2, 1, employeeSheet.getLastRow(), 1);
+    src.copyTo(
+      dst,
+      SpreadsheetApp.CopyPasteType.PASTE_VALUES,
+      trueIfTransposed
+    );
+    const numEmployees = src.getNumRows();
+    return numEmployees;
+  }
+
+  export interface Employee {
+    handle: string; // aka "andi"
+    alias?: string; // aka "Der Boss"
+  }
+
+  /** Return a dictionary from both names and aliases to */
+  export function get(): Record<string, Employee> {
+    const employeeSheet = getSheet();
+    const src = employeeSheet
+      .getRange(2, 1, employeeSheet.getLastRow(), 2)
+      .getValues();
+    const res: Record<string, Employee> = {};
+    src.forEach((row) => {
+      const handle = String(row[0]);
+      const alias = row[1] !== "" ? String(row[1]) : undefined;
+      const employee = { handle, alias };
+      if (alias !== undefined) {
+        res[alias] = employee;
+      }
+      res[handle] = employee;
+    });
+    return res;
+  }
 }
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu("BS")
-    .addItem("Mitarbeiter Doodle -> Schedule", "mitarbeiterUebertragenCallback")
-    .addSeparator()
-    .addItem("Zeitraum aendern", "zeitraumAendernCallback")
-    .addItem("Doodle einlesen", "doodleEinlesenCallback")
-    .addSeparator()
-    .addItem("Sicherheitskopie erstellen", "sicherheitskopieErstellenCallback")
-    .addItem(
-      "Sicherheitskopie wiederherstellen!",
-      "sicherheitskopieWiederherstellenCallback"
-    )
-    .addToUi();
-  Main.onOpenCallback();
+namespace ScheduleSheet {
+  const EMPLOYEE_COLUMNS = 3;
+  const INDEX_COLUMN = EMPLOYEE_COLUMNS + 2;
+  const FIRST_ENTRY_COLUMN = INDEX_COLUMN + 1;
+  const FIRST_ENTRY_ROW = 5;
+  const ROWS_PER_ENTRY = 2;
+  const COLUMNS_PER_ENTRY = 2;
+  const FROM_DATE_ROW = 1;
+  const UNTIL_DATE_ROW = FROM_DATE_ROW + 1;
+  const DATE_COLUMN = FIRST_ENTRY_COLUMN;
+  const WEEKEND_COLOR = "#FFF2CC";
+
+  function columnLetter(n: number): string {
+    const res = [];
+    while (n > 0) {
+      const digit = n % 26;
+      if (digit === 0) {
+        res.push("Z");
+        n = Math.floor(n / 26 - 1);
+      } else {
+        res.push(String.fromCharCode("A".charCodeAt(0) + digit - 1));
+        n = Math.floor(n / 26);
+      }
+    }
+    res.reverse();
+    return res.join("");
+  }
+
+  function a1(row: number, column: number, sheetName?: string): string {
+    const cell = columnLetter(column) + String(row);
+    if (sheetName !== undefined) {
+      return sheetName + "!" + cell;
+    }
+    return cell;
+  }
+
+  function a1Range(
+    row1: number,
+    column1: number,
+    row2: number,
+    column2: number,
+    sheetName?: string
+  ): string {
+    return a1(row1, column1, sheetName) + ":" + a1(row2, column2, sheetName);
+  }
+
+  function getReferencesToSlotsForNthDay(
+    scheduleSheetName: string,
+    n: number,
+    mode: "exclude-doodle" | "include-doodle" | "only-doodle"
+  ): string {
+    return Locations.all(mode)
+      .map((loc) => {
+        const whole = a1(
+          FIRST_ENTRY_ROW + n * ROWS_PER_ENTRY,
+          FIRST_ENTRY_COLUMN + loc.ndx * COLUMNS_PER_ENTRY,
+          scheduleSheetName
+        );
+        const firstHalf = a1(
+          FIRST_ENTRY_ROW + n * ROWS_PER_ENTRY + 1,
+          FIRST_ENTRY_COLUMN + loc.ndx * COLUMNS_PER_ENTRY,
+          scheduleSheetName
+        );
+        const secondHalf = a1(
+          FIRST_ENTRY_ROW + n * ROWS_PER_ENTRY + 1,
+          FIRST_ENTRY_COLUMN + loc.ndx * COLUMNS_PER_ENTRY + 1,
+          scheduleSheetName
+        );
+        return `${whole};${firstHalf};${secondHalf}`;
+      })
+      .join(";");
+  }
+
+  /** Return the range of dates displayed. */
+  function getDates(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet
+  ): { from: Date; until: Date } {
+    const [[from], [until]] = sheet
+      .getRange(FROM_DATE_ROW, DATE_COLUMN, 2, 1)
+      .getValues();
+    return { from, until };
+  }
+
+  function setupComputationSheet(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    fromDate: Date,
+    toDate: Date,
+    mode: "exclude-doodle" | "include-doodle" | "only-doodle"
+  ): void {
+    const scheduleSheetName = scheduleSheet.getName();
+    sheet.clear();
+    sheet.clearConditionalFormatRules();
+    sheet.setFrozenRows(2);
+    sheet.setFrozenColumns(1);
+    const numDays = DateUtils.diff(toDate, fromDate) + 1;
+    const numEmployees = EmployeeSheet.copyEmployees(
+      sheet.getRange(1, 2),
+      "transposed"
+    );
+    sheet.getRange(1, 2, 1, numEmployees).setFontWeight("bold");
+    // Range starting at the first row of data (aka row[0] = row of fromDate)
+    const theRange = sheet.getRange(
+      2,
+      1,
+      numDays + 1, // +1 for the row of sums
+      numEmployees + 1
+    );
+    const cells = theRange.getValues();
+    // TODO: store start and stop of default periods somewhere and read them when creating
+    // this sheet.
+    const employees = a1(1, 2) + ":" + a1(1, numEmployees + 2 - 1);
+    const wholeDefault = 60 * 8;
+    const firstHalfDefault = 60 * 4;
+    const secondHalfDefault = 60 * 6;
+    const defaults = `${wholeDefault};${firstHalfDefault};${secondHalfDefault}`;
+    DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
+      const row = nth + 1; // to skip the sum row
+      const slots = getReferencesToSlotsForNthDay(scheduleSheetName, nth, mode);
+      cells[row][0] = date;
+      cells[row][1] = `=SCHEDULECOUNT(${employees};${defaults};${slots})`;
+    });
+    for (let e = 0; e < numEmployees; e++) {
+      const thatColumn = a1Range(3, 2 + e, 3 + numDays - 1, 2 + e);
+      cells[0][e + 1] = `=SUM(${thatColumn})`;
+    }
+    theRange.setValues(cells);
+  }
+
+  export interface Slot {
+    date: Date;
+    location: number;
+    shiftKind: number;
+    row: number;
+    column: number;
+  }
+
+  /** Return the range of all the entries for the given day. Result is undefined if the passed
+   * in date is not on the sheet.
+   */
+  export function rangeOfEntriesOfDay(
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    date: Date,
+    mode: "include-doodle" | "exclude-doodle"
+  ): {
+    range: GoogleAppsScript.Spreadsheet.Range;
+    row: number;
+    column: number;
+  } {
+    const dates = getDates(scheduleSheet);
+    const offset = DateUtils.diff(date, dates.from) * ROWS_PER_ENTRY;
+    const row = FIRST_ENTRY_ROW + offset;
+    const columns = Locations.all(mode).length * COLUMNS_PER_ENTRY;
+    return {
+      range: scheduleSheet.getRange(
+        row,
+        FIRST_ENTRY_COLUMN,
+        ROWS_PER_ENTRY,
+        columns
+      ),
+      row,
+      column: FIRST_ENTRY_COLUMN,
+    };
+  }
+
+  /** Convert the position of a cell to the address of the relevant slot, if there
+   * is one at that position.
+   */
+  export function cellToSlot(
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    mode: "include-doodle" | "exclude-doodle",
+    cell: { row: number; column: number }
+  ): undefined | Slot {
+    const dates = getDates(scheduleSheet);
+    const numDays = DateUtils.diff(dates.until, dates.from) + 1;
+    const rows = numDays * ROWS_PER_ENTRY;
+    const columns = Locations.all(mode).length * COLUMNS_PER_ENTRY;
+    if (
+      FIRST_ENTRY_ROW <= cell.row &&
+      cell.row < FIRST_ENTRY_ROW + rows &&
+      FIRST_ENTRY_COLUMN <= cell.column &&
+      cell.column < FIRST_ENTRY_COLUMN + columns
+    ) {
+      const date = DateUtils.addDays(
+        dates.from,
+        Math.floor((cell.row - FIRST_ENTRY_ROW) / ROWS_PER_ENTRY)
+      );
+      const row0or1 = (cell.row - FIRST_ENTRY_ROW) % 2;
+      let shiftKind = 0;
+      if (row0or1 === 1) {
+        if ((cell.column - FIRST_ENTRY_COLUMN) % COLUMNS_PER_ENTRY === 0) {
+          shiftKind = 1;
+        } else {
+          shiftKind = 2;
+        }
+      }
+      const location = Math.floor(
+        (cell.column - FIRST_ENTRY_COLUMN) / COLUMNS_PER_ENTRY
+      );
+      return { date, location, shiftKind, ...cell };
+    }
+    return undefined;
+  }
+
+  export function setup(
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    workSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    doodleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    fromDate: Date,
+    toDate: Date
+  ) {
+    function columnOfEntry(location: Locations.Location) {
+      return FIRST_ENTRY_COLUMN + location.ndx * COLUMNS_PER_ENTRY;
+    }
+    scheduleSheet.clear();
+    scheduleSheet.clearConditionalFormatRules();
+    scheduleSheet.setHiddenGridlines(true);
+    scheduleSheet.setFrozenRows(FIRST_ENTRY_ROW - 2);
+    scheduleSheet.setFrozenColumns(EMPLOYEE_COLUMNS);
+    scheduleSheet.setColumnWidth(INDEX_COLUMN - 1, 5);
+    scheduleSheet.setRowHeight(FIRST_ENTRY_ROW - 1, 5);
+    // setup pane on the left that shows computations.
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW, 1, 1, 2)
+      .setValues([["Mitarbeiter", "h"]])
+      .setFontWeight("bold");
+    const numEmployees = EmployeeSheet.copyEmployees(
+      scheduleSheet.getRange(FIRST_ENTRY_ROW + 1, 1)
+    );
+    const a = [];
+    const workSheetName = workSheet.getName();
+    for (let e = 0; e < numEmployees; e++) {
+      a[e] = [`=${a1(2, 2 + e, workSheetName)}/60`];
+    }
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW + 1, 2, numEmployees, 1)
+      .setValues(a);
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW, 1, numEmployees + 1, 2)
+      .applyRowBanding(SpreadsheetApp.BandingTheme.YELLOW);
+    // Setup the main scheduling section
+    DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
+      const row = FIRST_ENTRY_ROW + nth * ROWS_PER_ENTRY;
+      // Boxes around the dates in the index column
+      scheduleSheet
+        .getRange(row, INDEX_COLUMN)
+        .setValue(date)
+        .setNumberFormat('ddd", "mmmm" "d');
+      scheduleSheet
+        .getRange(row, INDEX_COLUMN, 2, 1)
+        .mergeVertically()
+        .setBorder(
+          true,
+          true,
+          true,
+          true,
+          false,
+          false,
+          "#000000",
+          SpreadsheetApp.BorderStyle.SOLID
+        )
+        .setVerticalAlignment("middle");
+      // one box per entry (aka date + location) with 3 slots each
+      Locations.all("include-doodle").forEach((loc) => {
+        const col = columnOfEntry(loc);
+
+        scheduleSheet.getRange(row, col, 1, 2).mergeAcross();
+        scheduleSheet
+          .getRange(row, col, 2, 2)
+          .setBorder(
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            "#000000",
+            SpreadsheetApp.BorderStyle.SOLID
+          )
+          .setBorder(
+            null,
+            null,
+            null,
+            null,
+            true,
+            true,
+            "#dddddd",
+            SpreadsheetApp.BorderStyle.SOLID
+          );
+      });
+      if (DateUtils.isWeekend(date)) {
+        scheduleSheet
+          .getRange(
+            row,
+            INDEX_COLUMN,
+            ROWS_PER_ENTRY,
+            1 + Locations.all("include-doodle").length * COLUMNS_PER_ENTRY
+          )
+          .setBackground(WEEKEND_COLOR);
+      }
+    });
+    scheduleSheet.autoResizeColumn(INDEX_COLUMN);
+    const headers: string[] = flatten(
+      Locations.all("include-doodle").map((loc) => [loc.name, ""])
+    );
+    scheduleSheet
+      .getRange(
+        FIRST_ENTRY_ROW - 2,
+        INDEX_COLUMN,
+        1,
+        Locations.all("include-doodle").length * COLUMNS_PER_ENTRY + 1
+      )
+      .setValues([[""].concat(headers)])
+      .setBackground("#F7CB4D")
+      .setFontWeight("bold");
+    SheetUtils.autoResizeColumns(
+      scheduleSheet,
+      FIRST_ENTRY_COLUMN,
+      COLUMNS_PER_ENTRY * Locations.all("include-doodle").length,
+      160
+    );
+    scheduleSheet.autoResizeRows(FIRST_ENTRY_ROW - 2, 1);
+    // Setup the sheet summing up the working minutes
+    setupComputationSheet(
+      workSheet,
+      scheduleSheet,
+      fromDate,
+      toDate,
+      "exclude-doodle"
+    );
+    // Setup the sheet summing up the doodled minutes
+    setupComputationSheet(
+      doodleSheet,
+      scheduleSheet,
+      fromDate,
+      toDate,
+      "only-doodle"
+    );
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN, 2, 2)
+      .setValues([["Von", fromDate], ["Bis", toDate]]);
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN, 2, 1)
+      .setFontWeight("bold")
+      .setHorizontalAlignment("right");
+    // dateRangeCache = undefined;
+    // sheet.getRange(1, 1, 1, 4).setValues([["Von", fDate, "bis", tDate]]);
+    // sheet
+    //   .getRangeList(["A1", "C1"])
+    //   .setFontWeight("bold")
+    //   .setHorizontalAlignment("right");
+    // sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
+  }
+
+  // export function rangeIntersectsEntries(
+  //   r: GoogleAppsScript.Spreadsheet.Range
+  // ): GoogleAppsScript.Spreadsheet.Range | undefined {
+  // }
 }
 
-function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit) {
-  Logger.log("onEdit start");
-  Main.onEditCallback(e);
-  Logger.log("onEdit stop");
+namespace ScheduleCount {
+  function gridArrayLength(a: unknown[][]): number {
+    return Math.max(a[0].length, a.length);
+  }
+
+  function gridArrayMap<A, B>(a: A[][], f: (elem: A) => B): B[][] {
+    return a.map((a2) => a2.map(f));
+  }
+
+  /** The actual implementation of schedule count */
+  function doScheduleCount(
+    employees: string[],
+    slot1DefaultMinutes: number,
+    slot2DefaultMinutes: number,
+    slot3DefaultMinutes: number,
+    slots: string[]
+  ): number[][] {
+    const slotDefaults = [
+      slot1DefaultMinutes,
+      slot2DefaultMinutes,
+      slot3DefaultMinutes,
+    ];
+    const nameToNdx: Record<string, number> = {};
+    const result: number[] = employees.map((_) => 0);
+    employees.forEach((name, ndx) => {
+      nameToNdx[name] = ndx;
+    });
+    slots.forEach((slot, slotNdx) => {
+      const slotItems = SlotParser.parse(slot);
+      slotItems.forEach((i) => {
+        let minutes: number = 0;
+        switch (i.kind) {
+          case "default":
+            minutes = slotDefaults[slotNdx % 3];
+            break;
+          case "specified":
+            minutes = i.duration;
+            break;
+        }
+        const ndx = nameToNdx[i.name];
+        if (ndx === undefined) {
+          throw Error(`Unbekannter Mitarbeiter ${i.name}`);
+        }
+        result[ndx] += minutes;
+      });
+    });
+    return [result];
+  }
+
+  function assertNumber(n: unknown, arg: string): number {
+    if (typeof n === "number") {
+      return n;
+    } else {
+      throw Error(`Expected ${arg} to be number.`);
+    }
+  }
+
+  function assertGridOfStrings(a: unknown, arg: string): string[] {
+    const result: string[] = [];
+    if (a instanceof Array) {
+      a.forEach((a2) =>
+        a2.forEach((x: unknown) => {
+          if (typeof x === "string") {
+            result.push(x);
+          } else {
+            throw Error(`Expected ${arg} to be a range strings.`);
+          }
+        })
+      );
+    } else {
+      throw Error(`Expected ${arg} to be a range strings.`);
+    }
+    return result;
+  }
+
+  function assertStrings(a: unknown, arg: string): string[] {
+    if (a instanceof Array && a.every((s: unknown) => typeof s === "string")) {
+      return a as string[];
+    } else {
+      throw Error(`Expected ${arg} to be a range strings.`);
+    }
+  }
+
+  /** The exported entry point that does the type checking */
+  export function main(
+    employees: unknown,
+    slot1DefaultMinutes: unknown,
+    slot2DefaultMinutes: unknown,
+    slot3DefaultMinutes: unknown,
+    slots: unknown[]
+  ): unknown {
+    const slot1DefaultMinutesN = assertNumber(
+      slot1DefaultMinutes,
+      "slot1DefaultMinutes"
+    );
+    const slot2DefaultMinutesN = assertNumber(
+      slot2DefaultMinutes,
+      "slot2DefaultMinutes"
+    );
+    const slot3DefaultMinutesN = assertNumber(
+      slot3DefaultMinutes,
+      "slot3DefaultMinutes"
+    );
+    const employeesA = assertGridOfStrings(employees, "employees");
+    const slotsA = assertStrings(slots, "slots");
+    return doScheduleCount(
+      employeesA,
+      slot1DefaultMinutesN,
+      slot2DefaultMinutesN,
+      slot3DefaultMinutesN,
+      slotsA
+    );
+  }
 }
 
-function initialSetup1() {
-  const spreadsheet = SpreadsheetApp.getActive();
-  spreadsheet.insertSheet("Schedule");
-  spreadsheet.insertSheet("Notizen");
-  spreadsheet.insertSheet("Daten");
-  spreadsheet.insertSheet("Mitarbeiter");
-  DataSheet.initialSetup();
+/**
+ * Parse schedule slots.  Returns an array matching the dimensions of
+ * the employee array where each element is the number of minutes worked
+ * by the corresponding employee.
+ * @param employees 1 dimensional array of employees
+ * @param {number} slot1DefaultMinutes
+ * @param {number} slot2DefaultMinutes
+ * @param {number} slot3DefaultMinutes
+ * @param {...string} slots
+ * @customfunction
+ */
+function SCHEDULECOUNT(
+  employees: unknown,
+  slot1DefaultMinutes: unknown,
+  slot2DefaultMinutes: unknown,
+  slot3DefaultMinutes: unknown,
+  ...slots: unknown[]
+): unknown {
+  return ScheduleCount.main(
+    employees,
+    slot1DefaultMinutes,
+    slot2DefaultMinutes,
+    slot3DefaultMinutes,
+    slots
+  );
 }
 
-function initialSetup2() {
-  ScheduleSheet.setup(new Date("2019-05-23"), new Date("2019-06-26"));
+namespace EditEventDecoder {
+  /** A decoded version of the onEdit event:
+   * OnEditInsert means the cell was previously empty
+   * OnEditChange means the cell was not empty
+   * OnEditDelete means the cell is now empty
+   */
+  export interface OnEditInsert {
+    kind: "insert";
+    value: any;
+  }
+
+  export interface OnEditChange {
+    kind: "change";
+    value: any;
+    oldValue: any;
+  }
+
+  export interface OnEditClear {
+    kind: "clear";
+    oldValue: any;
+    value: "";
+  }
+
+  export interface OnEditMassChange {
+    kind: "mass-change";
+  }
+
+  export type OnEditEvent =
+    | OnEditInsert
+    | OnEditChange
+    | OnEditClear
+    | OnEditMassChange;
+
+  /** Turn a google sheet onEdit Event into a typed event. */
+  export function onEditEvent(
+    event: GoogleAppsScript.Events.SheetsOnEdit
+  ): OnEditEvent {
+    if (event.oldValue === undefined && event.value === undefined) {
+      return { kind: "mass-change" };
+    } else if (event.oldValue === undefined && event.value !== undefined) {
+      return { kind: "insert", value: event.value };
+    } else if (
+      event.oldValue !== undefined &&
+      event.value.oldValue !== undefined
+    ) {
+      return { kind: "clear", oldValue: event.oldValue, value: "" };
+    } else {
+      return { kind: "change", oldValue: event.oldValue, value: event.value };
+    }
+  }
+}
+
+// Core idea here is that we detect additions and turn them into moves
+// Note that comments on stackexchanges claim that onEdit events can
+// get collapsed.  I couldn't observe this in testing, but it's better
+// to not store critical functionality in the event handlers.
+namespace EditHandler {
+  function turnDuplicatesIntoMoves(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    slot: ScheduleSheet.Slot
+  ) {
+    // We remove any duplicates of the words in
+    // the current slots from all other slots on the same day.
+    Logger.log("slot: %s", slot);
+    const entries = ScheduleSheet.rangeOfEntriesOfDay(
+      sheet,
+      slot.date,
+      "exclude-doodle"
+    );
+    const cells = entries.range.getValues();
+    Logger.log("cells: %s", cells);
+    const employeesInChangedCell = SlotParser.parse(
+      cells[slot.row - entries.row][slot.column - entries.column]
+    );
+    const namesInChangedCell = employeesInChangedCell.map((e) => e.name);
+    if (namesInChangedCell.length > 0) {
+      let hasChange = false;
+      for (let r = 0; r < cells.length; r++) {
+        for (let c = 0; c < cells[r].length; c++) {
+          if (
+            (r !== slot.row - entries.row ||
+              c !== slot.column - entries.column) &&
+            cells[r][c] !== ""
+          ) {
+            // Todo hoist compilation of regex outside of the loop
+            const newSlot = SlotParser.removeEmployees(
+              cells[r][c],
+              namesInChangedCell
+            );
+            if (newSlot !== cells[r][c]) {
+              Logger.log("Change: %s -> %s", cells[r][c], newSlot);
+              cells[r][c] = newSlot;
+              hasChange = true;
+            }
+          }
+        }
+      }
+      if (hasChange) {
+        entries.range.setValues(cells);
+      }
+    }
+  }
+
+  export function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+    const sheet = e.range.getSheet();
+    // Are we on a schedule sheet?
+    if (sheet.getName() === "S") {
+      const ev = EditEventDecoder.onEditEvent(e);
+      Logger.log("%s of %s", ev.kind, e.range.getA1Notation());
+
+      switch (ev.kind) {
+        case "mass-change":
+          // After a mass change we just give up and hope the user will
+          // recognize that they have to do manual work
+          break;
+        case "change":
+        case "clear":
+        case "insert":
+          const slot = ScheduleSheet.cellToSlot(sheet, "exclude-doodle", {
+            row: e.range.getRow(),
+            column: e.range.getColumn(),
+          });
+          if (slot !== undefined) {
+            turnDuplicatesIntoMoves(sheet, slot);
+          }
+          break;
+      }
+    }
+  }
+}
+
+function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+  EditHandler.onEdit(e);
+}
+
+function main() {
+  const spreadsheetApp = SpreadsheetApp.getActive();
+  const scheduleSheet = spreadsheetApp.getSheetByName("S");
+  const workSheet = spreadsheetApp.getSheetByName("W");
+  const doodleSheet = spreadsheetApp.getSheetByName("D");
+  ScheduleSheet.setup(
+    scheduleSheet,
+    workSheet,
+    doodleSheet,
+    new Date("2019-05-23"),
+    new Date("2019-05-30")
+  );
 }
