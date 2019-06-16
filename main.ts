@@ -568,7 +568,7 @@ namespace SheetLayouter {
   function a1(row: number, column: number, sheetName?: string): string {
     const cell = columnLetter(column) + String(row);
     if (sheetName !== undefined) {
-      return sheetName + "!" + cell;
+      return "'" + sheetName + "'!" + cell;
     }
     return cell;
   }
