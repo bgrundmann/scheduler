@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 // TODO:
 // - Add doodle parser functionality (into doodle column)
 // - Use schedulecount to parse the doodle after its placed in the doodle
@@ -6,6 +7,20 @@
 function flatten<T>(a: T[][]): T[] {
   const empty: T[] = [];
   return empty.concat(...a);
+}
+
+function assertDate(v: unknown): Date {
+  if (v instanceof Date) {
+    return v;
+  }
+  throw Error(`Expected a date, got ${v}`);
+}
+
+function cellAsString(v: unknown): string {
+  if (typeof v === "string") {
+    return v;
+  }
+  return String(v);
 }
 
 namespace DateUtils {
@@ -91,6 +106,11 @@ namespace DateUtils {
       return new Date(s);
     }
     return undefined;
+  }
+
+  export function toISODate(d: Date): string {
+    const s = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+    return Utilities.formatDate(d, s, "YYYY-MM-dd");
   }
 }
 
@@ -276,10 +296,15 @@ namespace DoodleParser {
   export interface Entry {
     employee: string;
     date: Date;
+    /** minutes since beginning of day. */
     start: number;
+    /** minutes since beginning of day. */
     stop: number;
   }
 
+  /** Parse the doodle sheet (which must be called Umfrage) and return a list of entries found.
+   * Throws an error if it couldn't parse an entry.
+   */
   export function parse(): Entry[] {
     const ss = SpreadsheetApp.getActive();
     const doodle = ss.getSheetByName("Umfrage");
@@ -511,7 +536,8 @@ namespace EmployeeSheet {
   }
 }
 
-namespace ScheduleSheet {
+/** Responsible for the initial setup of all the sheets */
+namespace SheetLayouter {
   const EMPLOYEE_COLUMNS = 3;
   const INDEX_COLUMN = EMPLOYEE_COLUMNS + 2;
   const FIRST_ENTRY_COLUMN = INDEX_COLUMN + 1;
@@ -588,9 +614,11 @@ namespace ScheduleSheet {
   function getDates(
     sheet: GoogleAppsScript.Spreadsheet.Sheet
   ): { from: Date; until: Date } {
-    const [[from], [until]] = sheet
+    const [[fromV], [untilV]] = sheet
       .getRange(FROM_DATE_ROW, DATE_COLUMN, 2, 1)
       .getValues();
+    const from = assertDate(fromV);
+    const until = assertDate(untilV);
     return { from, until };
   }
 
@@ -871,6 +899,145 @@ namespace ScheduleSheet {
   // }
 }
 
+namespace SheetsManager {
+  type Sheet = GoogleAppsScript.Spreadsheet.Sheet;
+  export interface Item {
+    /** The date range covered by this set of sheets. */
+    from: Date;
+    until: Date;
+    /** this contains the schedule and is the main UI element. */
+    scheduleSheet: Sheet;
+    /** This contains the result of the SCHEDULECOUNT function for the regular slots */
+    workSheet: Sheet;
+    /** This contains the result of the SCHEDULECOUNT function for the doodle slots */
+    doodleSheet: Sheet;
+  }
+
+  interface ItemInProgress {
+    from: Date;
+    until: Date;
+    scheduleSheet?: Sheet;
+    workSheet?: Sheet;
+    doodleSheet?: Sheet;
+  }
+
+  const nameRegex = RegExp(
+    "^(S|D|W) ([0-9]{4}-[0-9]{2}-[0-9]{2}) ([0-9]{4}-[0-9]{2}-[0-9]{2})$"
+  );
+
+  function makeSheetName(kind: "S" | "D" | "W", from: Date, until: Date) {
+    const fromS = DateUtils.toISODate(from);
+    const untilS = DateUtils.toISODate(until);
+    const res = `${kind} ${fromS} ${untilS}`;
+    Logger.log(res);
+    return res;
+  }
+
+  /** Create a new set of sheets and do their layout. */
+  export function create(from: Date, until: Date): Item {
+    const s = SpreadsheetApp.getActiveSpreadsheet();
+    const scheduleSheetName = makeSheetName("S", from, until);
+    const workSheetName = makeSheetName("W", from, until);
+    const doodleSheetName = makeSheetName("D", from, until);
+    const scheduleSheet = s.insertSheet(scheduleSheetName);
+    const workSheet = s.insertSheet(workSheetName);
+    const doodleSheet = s.insertSheet(doodleSheetName);
+    SheetLayouter.setup(scheduleSheet, workSheet, doodleSheet, from, until);
+    return { from, until, scheduleSheet, workSheet, doodleSheet };
+  }
+
+  /** Return the active item (aka the one that is currently selected). */
+  export function getActiveItem(): Item | undefined {
+    const ss = SpreadsheetApp.getActive();
+    const sheet = ss.getActiveSheet();
+    const r = parseSheetName(sheet.getName());
+    if (r === undefined) {
+      return undefined;
+    }
+    const scheduleSheet = ss.getSheetByName(
+      makeSheetName("S", r.from, r.until)
+    );
+    const doodleSheet = ss.getSheetByName(makeSheetName("D", r.from, r.until));
+    const workSheet = ss.getSheetByName(makeSheetName("W", r.from, r.until));
+    return {
+      from: r.from,
+      until: r.until,
+      scheduleSheet,
+      doodleSheet,
+      workSheet,
+    };
+  }
+
+  function parseSheetName(
+    s: string
+  ): { from: Date; until: Date; kind: "S" | "D" | "W" } | undefined {
+    const m = nameRegex.exec(s);
+    if (m !== null) {
+      const from = new Date(m[2]);
+      const until = new Date(m[3]);
+      const kind = m[1] as "S" | "D" | "W";
+      return { from, until, kind };
+    }
+    return undefined;
+  }
+
+  export function validateAndList(): Item[] {
+    const items: Record<string, ItemInProgress> = {};
+    const s = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = s.getSheets();
+    sheets.forEach((s) => {
+      const name = s.getName();
+      const m = nameRegex.exec(name);
+      if (m !== null) {
+        const from = new Date(m[2]);
+        const until = new Date(m[3]);
+        const kind = m[1];
+        const key = from.toString() + "-" + until.toString();
+        if (!items[key]) {
+          items[key] = { from, until };
+        }
+        const item = items[key];
+        switch (kind) {
+          case "S":
+            item.scheduleSheet = s;
+            break;
+          case "D":
+            item.doodleSheet = s;
+            break;
+          case "W":
+            item.workSheet = s;
+            break;
+          default:
+            throw Error("Can't happen because of regex above...");
+        }
+      }
+    });
+
+    const res: Item[] = [];
+    for (const key of Object.keys(items)) {
+      const item = items[key];
+      if (item.scheduleSheet === undefined) {
+        throw Error(`Das S sheet fuer ${item.from} - ${item.until} fehlt.`);
+      }
+      if (item.doodleSheet === undefined) {
+        throw Error(`Das D sheet fuer ${item.from} - ${item.until} fehlt.`);
+      }
+      if (item.workSheet === undefined) {
+        throw Error(`Das W sheet fuer ${item.from} - ${item.until} fehlt.`);
+      }
+      res.push({
+        from: item.from,
+        until: item.until,
+        scheduleSheet: item.scheduleSheet!,
+        doodleSheet: item.doodleSheet!,
+        workSheet: item.workSheet!,
+      });
+    }
+
+    return res;
+  }
+}
+
 namespace ScheduleCount {
   function gridArrayLength(a: unknown[][]): number {
     return Math.max(a[0].length, a.length);
@@ -1072,12 +1239,12 @@ namespace EditEventDecoder {
 namespace EditHandler {
   function turnDuplicatesIntoMoves(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
-    slot: ScheduleSheet.Slot
+    slot: SheetLayouter.Slot
   ) {
     // We remove any duplicates of the words in
     // the current slots from all other slots on the same day.
     Logger.log("slot: %s", slot);
-    const entries = ScheduleSheet.rangeOfEntriesOfDay(
+    const entries = SheetLayouter.rangeOfEntriesOfDay(
       sheet,
       slot.date,
       "exclude-doodle"
@@ -1085,7 +1252,7 @@ namespace EditHandler {
     const cells = entries.range.getValues();
     Logger.log("cells: %s", cells);
     const employeesInChangedCell = SlotParser.parse(
-      cells[slot.row - entries.row][slot.column - entries.column]
+      cellAsString(cells[slot.row - entries.row][slot.column - entries.column])
     );
     const namesInChangedCell = employeesInChangedCell.map((e) => e.name);
     if (namesInChangedCell.length > 0) {
@@ -1099,7 +1266,7 @@ namespace EditHandler {
           ) {
             // Todo hoist compilation of regex outside of the loop
             const newSlot = SlotParser.removeEmployees(
-              cells[r][c],
+              cellAsString(cells[r][c]),
               namesInChangedCell
             );
             if (newSlot !== cells[r][c]) {
@@ -1117,9 +1284,15 @@ namespace EditHandler {
   }
 
   export function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
+    const item = SheetsManager.getActiveItem();
+    // Is an item currently active and was it's schedule sheet edited?
     const sheet = e.range.getSheet();
-    // Are we on a schedule sheet?
-    if (sheet.getName() === "S") {
+    Logger.log("%s", sheet);
+    Logger.log("%s", item === undefined ? "undefined" : item);
+    if (
+      item !== undefined &&
+      sheet.getName() === item.scheduleSheet.getName()
+    ) {
       const ev = EditEventDecoder.onEditEvent(e);
       Logger.log("%s of %s", ev.kind, e.range.getA1Notation());
 
@@ -1131,7 +1304,7 @@ namespace EditHandler {
         case "change":
         case "clear":
         case "insert":
-          const slot = ScheduleSheet.cellToSlot(sheet, "exclude-doodle", {
+          const slot = SheetLayouter.cellToSlot(sheet, "exclude-doodle", {
             row: e.range.getRow(),
             column: e.range.getColumn(),
           });
@@ -1148,16 +1321,82 @@ function onEdit(e: GoogleAppsScript.Events.SheetsOnEdit): void {
   EditHandler.onEdit(e);
 }
 
-function main() {
-  const spreadsheetApp = SpreadsheetApp.getActive();
-  const scheduleSheet = spreadsheetApp.getSheetByName("S");
-  const workSheet = spreadsheetApp.getSheetByName("W");
-  const doodleSheet = spreadsheetApp.getSheetByName("D");
-  ScheduleSheet.setup(
-    scheduleSheet,
-    workSheet,
-    doodleSheet,
-    new Date("2019-05-23"),
-    new Date("2019-05-30")
+function promptForDate(
+  ui: GoogleAppsScript.Base.Ui,
+  prompt: string
+): Date | undefined {
+  const res = ui.prompt(
+    prompt,
+    "Bitte gebe ein Datum ein (YYYY-MM-TT zBsp 1981-07-14)",
+    ui.ButtonSet.OK_CANCEL
   );
+  const bt = res.getSelectedButton();
+  if (bt === ui.Button.OK) {
+    return new Date(res.getResponseText());
+  } else {
+    return undefined;
+  }
+}
+
+function menuCbNewSchedule() {
+  const items = SheetsManager.validateAndList();
+  items.forEach((item) => {
+    item.scheduleSheet.setTabColor(null);
+    item.doodleSheet.setTabColor(null);
+    item.workSheet.setTabColor(null);
+  });
+  Logger.log("%s", items);
+  const ui = SpreadsheetApp.getUi();
+  const from = promptForDate(ui, "Von");
+  if (from === undefined) {
+    return;
+  }
+  const until = promptForDate(ui, "Bis");
+  if (until === undefined) {
+    return;
+  }
+  const item = SheetsManager.create(from, until);
+  item.doodleSheet.setTabColor("green");
+  item.workSheet.setTabColor("green");
+  item.scheduleSheet.setTabColor("green");
+  item.scheduleSheet.activate();
+}
+
+function menuCbParseDoodle() {
+  const ui = SpreadsheetApp.getUi();
+  const item = SheetsManager.getActiveItem();
+  if (item !== undefined) {
+    ui.alert("TODO");
+  } else {
+    ui.alert("...");
+  }
+}
+
+function menuCbHideWD() {
+  const items = SheetsManager.validateAndList();
+  items.forEach((item) => {
+    item.workSheet.hideSheet();
+    item.doodleSheet.hideSheet();
+  });
+}
+
+function menuCbShowWD() {
+  const items = SheetsManager.validateAndList();
+  items.forEach((item) => {
+    item.workSheet.showSheet();
+    item.doodleSheet.showSheet();
+  });
+}
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  // Or DocumentApp or FormApp.
+  ui.createMenu("BS")
+    .addItem("Neu...", "menuCbNewSchedule")
+    .addSeparator()
+    .addItem("Doodle einlesen.", "menuCbParseDoodle")
+    .addSeparator()
+    .addItem("Verstecke W, D.", "menuCbHideWD")
+    .addItem("Zeige W, D.", "menuCbShowWD")
+    .addToUi();
 }
