@@ -1340,12 +1340,6 @@ function promptForDate(
 
 function menuCbNewSchedule() {
   const items = SheetsManager.validateAndList();
-  items.forEach((item) => {
-    item.scheduleSheet.setTabColor(null);
-    item.doodleSheet.setTabColor(null);
-    item.workSheet.setTabColor(null);
-  });
-  Logger.log("%s", items);
   const ui = SpreadsheetApp.getUi();
   const from = promptForDate(ui, "Von");
   if (from === undefined) {
@@ -1355,6 +1349,11 @@ function menuCbNewSchedule() {
   if (until === undefined) {
     return;
   }
+  items.forEach((item) => {
+    item.scheduleSheet.setTabColor(null);
+    item.doodleSheet.setTabColor(null);
+    item.workSheet.setTabColor(null);
+  });
   const item = SheetsManager.create(from, until);
   item.doodleSheet.setTabColor("green");
   item.workSheet.setTabColor("green");
