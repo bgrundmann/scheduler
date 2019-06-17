@@ -9,6 +9,16 @@ function flatten<T>(a: T[][]): T[] {
   return empty.concat(...a);
 }
 
+function findIndex<T>(a: T[], pred: (elem: T) => boolean): number | undefined {
+  const l = a.length;
+  for (let ndx = 0; ndx < l; ndx++) {
+    if (pred(a[ndx])) {
+      return ndx;
+    }
+  }
+  return undefined;
+}
+
 function assertDate(v: unknown): Date {
   if (v instanceof Date) {
     return v;
@@ -111,6 +121,20 @@ namespace DateUtils {
   export function toISODate(d: Date): string {
     const s = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
     return Utilities.formatDate(d, s, "YYYY-MM-dd");
+  }
+
+  export function max(a: Date, b: Date): Date {
+    if (a.getTime() >= b.getTime()) {
+      return a;
+    }
+    return b;
+  }
+
+  export function min(a: Date, b: Date): Date {
+    if (a.getTime() <= b.getTime()) {
+      return a;
+    }
+    return b;
   }
 }
 
@@ -313,16 +337,20 @@ namespace DoodleParser {
     const days = parseMergedRow(doodle, 5, 2, doodle.getLastColumn());
     const times = parseMergedRow(doodle, 6, 2, doodle.getLastColumn());
 
-    const values = doodle
-      .getRange(7, 1, doodle.getLastRow() - 7 - 2, doodle.getLastColumn() - 1)
+    const valuesAndMore = doodle
+      .getRange(7, 1, doodle.getLastRow() - 6, doodle.getLastColumn() - 1)
       .getValues();
+    const summaryRow = findIndex(valuesAndMore, (row) => row[0] === "Anzahl");
+    if (summaryRow === undefined) {
+      throw Error("Konnte die Anzahl Zeile nicht finden");
+    }
+    const values = valuesAndMore.slice(undefined, summaryRow);
     const result: Entry[] = [];
     forEachShift(monthAndYears, days, times, (d, c) => {
       // NOTE: forEachShift column is absolute column on sheet (with 1 being A)
       // But values array is 0 based
       for (const row of values) {
         const parsedName = row[0].toString();
-        // FIXME: Error handling here
         if (!(parsedName in employeeDict)) {
           throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
         }
@@ -427,7 +455,6 @@ namespace SlotParser {
       `(\\b(${names})\\b( +[0-9-:]+)? *,?)`,
       "g"
     );
-    Logger.log("%s on %s", interestingItemRegex, slot);
     const res = slot.replace(interestingItemRegex, "").trim();
     if (res.length > 0 && res[res.length - 1] === ",") {
       return res.substr(0, res.length - 1);
@@ -1243,14 +1270,12 @@ namespace EditHandler {
   ) {
     // We remove any duplicates of the words in
     // the current slots from all other slots on the same day.
-    Logger.log("slot: %s", slot);
     const entries = SheetLayouter.rangeOfEntriesOfDay(
       sheet,
       slot.date,
       "exclude-doodle"
     );
     const cells = entries.range.getValues();
-    Logger.log("cells: %s", cells);
     const employeesInChangedCell = SlotParser.parse(
       cellAsString(cells[slot.row - entries.row][slot.column - entries.column])
     );
@@ -1270,7 +1295,6 @@ namespace EditHandler {
               namesInChangedCell
             );
             if (newSlot !== cells[r][c]) {
-              Logger.log("Change: %s -> %s", cells[r][c], newSlot);
               cells[r][c] = newSlot;
               hasChange = true;
             }
@@ -1287,14 +1311,11 @@ namespace EditHandler {
     const item = SheetsManager.getActiveItem();
     // Is an item currently active and was it's schedule sheet edited?
     const sheet = e.range.getSheet();
-    Logger.log("%s", sheet);
-    Logger.log("%s", item === undefined ? "undefined" : item);
     if (
       item !== undefined &&
       sheet.getName() === item.scheduleSheet.getName()
     ) {
       const ev = EditEventDecoder.onEditEvent(e);
-      Logger.log("%s of %s", ev.kind, e.range.getA1Notation());
 
       switch (ev.kind) {
         case "mass-change":
@@ -1363,11 +1384,18 @@ function menuCbNewSchedule() {
 
 function menuCbParseDoodle() {
   const ui = SpreadsheetApp.getUi();
-  const item = SheetsManager.getActiveItem();
-  if (item !== undefined) {
-    ui.alert("TODO");
-  } else {
-    ui.alert("...");
+  const items = SheetsManager.validateAndList();
+  const entries = DoodleParser.parse();
+  entries.forEach((e) => {
+    Logger.log("%s", e);
+  });
+  const dates = entries.map((e) => e.date);
+  const from = dates.reduce(DateUtils.min);
+  const until = dates.reduce(DateUtils.max);
+  ui.alert(`TODO check if there is a sheet ${from} until ${until}`);
+  if (items.length === 0) {
+    ui.alert("");
+    return;
   }
 }
 
