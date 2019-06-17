@@ -508,6 +508,7 @@ namespace Locations {
       | "exclude-planner-and-doodle"
       | "include-planner-exclude-doodle"
       | "only-doodle"
+      | "only-planner"
   ): Location[] {
     switch (mode) {
       case "include-planner-exclude-doodle":
@@ -518,6 +519,8 @@ namespace Locations {
         return theList;
       case "only-doodle":
         return doodle;
+      case "only-planner":
+        return planner;
     }
   }
 }
@@ -576,7 +579,7 @@ namespace EmployeeSheet {
 namespace SheetLayouter {
   const EMPLOYEE_COLUMNS = 3;
   const INDEX_COLUMN = EMPLOYEE_COLUMNS + 2;
-  const FIRST_ENTRY_COLUMN = INDEX_COLUMN + 1;
+  const FIRST_ENTRY_COLUMN = INDEX_COLUMN + 2;
   const FIRST_ENTRY_ROW = 5;
   const ROWS_PER_ENTRY = 2;
   const COLUMNS_PER_ENTRY = 2;
@@ -584,6 +587,7 @@ namespace SheetLayouter {
   const UNTIL_DATE_ROW = FROM_DATE_ROW + 1;
   const DATE_COLUMN = FIRST_ENTRY_COLUMN;
   const WEEKEND_COLOR = "#FFF2CC";
+  const DOODLE_COLOR = "#5B95F9";
 
   function columnLetter(n: number): string {
     const res = [];
@@ -644,6 +648,34 @@ namespace SheetLayouter {
         return `${whole};${firstHalf};${secondHalf}`;
       })
       .join(";");
+  }
+
+  function countEmployeesFormula(slot: string): string {
+    return `IF(ISBLANK(${slot});0;LEN(${slot})-LEN(REGEXREPLACE(${slot};","; ""))+1)`;
+  }
+
+  /** Count number of employees available in the first and second half of the day as per doodle */
+  function countAvailableEmployeesFormula(
+    nthDay: number
+  ): { firstHalf: string; secondHalf: string } {
+    const doodle = Locations.all("only-doodle")[0];
+    const whole = a1(
+      FIRST_ENTRY_ROW + nthDay * ROWS_PER_ENTRY,
+      FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY
+    );
+    const firstHalf = a1(
+      FIRST_ENTRY_ROW + nthDay * ROWS_PER_ENTRY + 1,
+      FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY
+    );
+    const secondHalf = a1(
+      FIRST_ENTRY_ROW + nthDay * ROWS_PER_ENTRY + 1,
+      FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY + 1
+    );
+    const wholeFormula = countEmployeesFormula(whole);
+    return {
+      firstHalf: `=${countEmployeesFormula(firstHalf)}+${wholeFormula}`,
+      secondHalf: `=${countEmployeesFormula(secondHalf)}+${wholeFormula}`,
+    };
   }
 
   /** Return the range of dates displayed. */
@@ -808,7 +840,7 @@ namespace SheetLayouter {
     scheduleSheet.clearConditionalFormatRules();
     scheduleSheet.setHiddenGridlines(true);
     scheduleSheet.setFrozenRows(FIRST_ENTRY_ROW - 2);
-    scheduleSheet.setFrozenColumns(EMPLOYEE_COLUMNS);
+    scheduleSheet.setFrozenColumns(INDEX_COLUMN + 1);
     scheduleSheet.setColumnWidth(INDEX_COLUMN - 1, 5);
     scheduleSheet.setRowHeight(FIRST_ENTRY_ROW - 1, 5);
     scheduleSheet
@@ -837,7 +869,7 @@ namespace SheetLayouter {
       .setValues(a);
     scheduleSheet
       .getRange(FIRST_ENTRY_ROW, 1, numEmployees + 1, 2)
-      .applyRowBanding(SpreadsheetApp.BandingTheme.YELLOW);
+      .applyRowBanding(SpreadsheetApp.BandingTheme.BLUE);
     // Setup the main scheduling section
     DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
       const row = FIRST_ENTRY_ROW + nth * ROWS_PER_ENTRY;
@@ -847,8 +879,15 @@ namespace SheetLayouter {
         .setValue(date)
         .setNumberFormat('ddd", "mmmm" "d');
       scheduleSheet
-        .getRange(row, INDEX_COLUMN, 2, 1)
-        .mergeVertically()
+        .getRange(row, INDEX_COLUMN, 1, 2)
+        .mergeAcross()
+        .setHorizontalAlignment("center");
+      const f = countAvailableEmployeesFormula(nth);
+      scheduleSheet
+        .getRange(row + 1, INDEX_COLUMN, 1, 2)
+        .setValues([[f.firstHalf, f.secondHalf]]);
+      scheduleSheet
+        .getRange(row, INDEX_COLUMN, 2, 2)
         .setBorder(
           true,
           true,
@@ -858,9 +897,7 @@ namespace SheetLayouter {
           false,
           "#000000",
           SpreadsheetApp.BorderStyle.SOLID
-        )
-        .setVerticalAlignment("middle");
-      // one box per entry (aka date + location) with 3 slots each
+        );
       Locations.all("include-planner-and-doodle").forEach((loc) => {
         const col = columnOfEntry(loc);
 
@@ -894,14 +931,14 @@ namespace SheetLayouter {
             row,
             INDEX_COLUMN,
             ROWS_PER_ENTRY,
-            1 +
+            2 +
               Locations.all("include-planner-and-doodle").length *
                 COLUMNS_PER_ENTRY
           )
           .setBackground(WEEKEND_COLOR);
       }
     });
-    scheduleSheet.autoResizeColumn(INDEX_COLUMN);
+    scheduleSheet.autoResizeColumns(INDEX_COLUMN, 2);
     const headers: string[] = flatten(
       Locations.all("include-planner-and-doodle").map((loc) => [loc.name, ""])
     );
@@ -911,11 +948,20 @@ namespace SheetLayouter {
         INDEX_COLUMN,
         1,
         Locations.all("include-planner-and-doodle").length * COLUMNS_PER_ENTRY +
-          1
+          2
       )
-      .setValues([[""].concat(headers)])
+      .setValues([["", ""].concat(headers)])
       .setBackground("#F7CB4D")
       .setFontWeight("bold");
+    scheduleSheet
+      .getRange(
+        FIRST_ENTRY_ROW - 2,
+        FIRST_ENTRY_COLUMN +
+          Locations.all("only-doodle")[0].ndx * COLUMNS_PER_ENTRY,
+        1,
+        COLUMNS_PER_ENTRY
+      )
+      .setBackground(DOODLE_COLOR);
     SheetUtils.autoResizeColumns(
       scheduleSheet,
       FIRST_ENTRY_COLUMN,
@@ -940,10 +986,10 @@ namespace SheetLayouter {
       "only-doodle"
     );
     scheduleSheet
-      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN, 2, 2)
+      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN + 1, 2, 2)
       .setValues([["Von", fromDate], ["Bis", toDate]]);
     scheduleSheet
-      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN, 2, 1)
+      .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN + 1, 2, 1)
       .setFontWeight("bold")
       .setHorizontalAlignment("right");
     // dateRangeCache = undefined;
@@ -959,6 +1005,9 @@ namespace SheetLayouter {
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     entries: DoodleParser.Entry[]
   ) {
+    // TODO: Make it such that one can run this function multiple
+    // times (in particular after planning has started) and it should
+    // do the right thing (TM).
     // TODO: check that sheet mentions what the default times are...
     const doodle = Locations.all("only-doodle")[0];
     const { from, until } = getDates(scheduleSheet);
@@ -971,6 +1020,12 @@ namespace SheetLayouter {
       COLUMNS_PER_ENTRY
     );
     const values = range.getValues();
+    // Clear content if any
+    values.forEach((row) => {
+      for (let i = 0; i < row.length; i++) {
+        row[i] = "";
+      }
+    });
     entries.forEach((entry) => {
       const row = DateUtils.diff(entry.date, from) * ROWS_PER_ENTRY;
       function add(rowOff: number, colOff: number) {
@@ -989,6 +1044,14 @@ namespace SheetLayouter {
       }
     });
     range.setValues(values);
+    const planner = Locations.all("only-planner")[0];
+    const plannerRange = scheduleSheet.getRange(
+      FIRST_ENTRY_ROW,
+      FIRST_ENTRY_COLUMN + planner.ndx * COLUMNS_PER_ENTRY,
+      numDays * ROWS_PER_ENTRY,
+      COLUMNS_PER_ENTRY
+    );
+    plannerRange.setValues(values);
   }
 }
 
