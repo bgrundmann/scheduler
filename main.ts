@@ -19,6 +19,14 @@ function findIndex<T>(a: T[], pred: (elem: T) => boolean): number | undefined {
   return undefined;
 }
 
+function find<T>(a: T[], pred: (elem: T) => boolean): T | undefined {
+  const ndx = findIndex(a, pred);
+  if (ndx !== undefined) {
+    return a[ndx];
+  }
+  return undefined;
+}
+
 function assertDate(v: unknown): Date {
   if (v instanceof Date) {
     return v;
@@ -243,16 +251,6 @@ namespace DoodleParser {
     const lastColumn = monthAndYears[monthAndYears.length - 1].lastColumn;
 
     for (let column = monthAndYears[0].column; column <= lastColumn; column++) {
-      Logger.log(
-        "[1] column = %s, month = %s (%s), day = %s (%s), time = %s (%s)",
-        column,
-        month,
-        monthAndYears[month],
-        day,
-        days[day],
-        time,
-        times[time]
-      );
       if (
         !betweenInclusive(
           column,
@@ -270,16 +268,6 @@ namespace DoodleParser {
       ) {
         time++;
       }
-      Logger.log(
-        "[2] column = %s, month = %s (%s), day = %s (%s), time = %s (%s)",
-        column,
-        month,
-        monthAndYears[month],
-        day,
-        days[day],
-        time,
-        times[time]
-      );
       let r = monthAndYearRegex.exec(monthAndYears[month].value);
       if (r == null) {
         throw Error("Failed to parse month and year in doodle");
@@ -920,10 +908,31 @@ namespace SheetLayouter {
     // sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
   }
 
-  // export function rangeIntersectsEntries(
-  //   r: GoogleAppsScript.Spreadsheet.Range
-  // ): GoogleAppsScript.Spreadsheet.Range | undefined {
-  // }
+  export function replaceDoodle(
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    entries: DoodleParser.Entry[]
+  ) {
+    // TODO: check that sheet mentions what the default times are...
+    const doodle = Locations.all("only-doodle")[0];
+    const { from, until } = getDates(scheduleSheet);
+    const numDays = DateUtils.diff(until, from) + 1;
+    const range = scheduleSheet.getRange(
+      FIRST_ENTRY_ROW,
+      FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY,
+      numDays * ROWS_PER_ENTRY,
+      COLUMNS_PER_ENTRY
+    );
+    const values = range.getValues();
+    entries.forEach((entry) => {
+      const row = DateUtils.diff(entry.date, from) * ROWS_PER_ENTRY;
+      // TODO figure out the shift to use and place accordingly
+      values[row][0] =
+        values[row][0] === ""
+          ? entry.employee
+          : values[row][0] + ", " + entry.employee;
+    });
+    range.setValues(values);
+  }
 }
 
 namespace SheetsManager {
@@ -1359,6 +1368,24 @@ function promptForDate(
   }
 }
 
+function createNewItem(
+  items: SheetsManager.Item[],
+  from: Date,
+  until: Date
+): SheetsManager.Item {
+  items.forEach((item) => {
+    item.scheduleSheet.setTabColor(null);
+    item.doodleSheet.setTabColor(null);
+    item.workSheet.setTabColor(null);
+  });
+  const item = SheetsManager.create(from, until);
+  item.doodleSheet.setTabColor("green");
+  item.workSheet.setTabColor("green");
+  item.scheduleSheet.setTabColor("green");
+  item.scheduleSheet.activate();
+  return item;
+}
+
 function menuCbNewSchedule() {
   const items = SheetsManager.validateAndList();
   const ui = SpreadsheetApp.getUi();
@@ -1370,32 +1397,32 @@ function menuCbNewSchedule() {
   if (until === undefined) {
     return;
   }
-  items.forEach((item) => {
-    item.scheduleSheet.setTabColor(null);
-    item.doodleSheet.setTabColor(null);
-    item.workSheet.setTabColor(null);
-  });
-  const item = SheetsManager.create(from, until);
-  item.doodleSheet.setTabColor("green");
-  item.workSheet.setTabColor("green");
-  item.scheduleSheet.setTabColor("green");
-  item.scheduleSheet.activate();
+  createNewItem(items, from, until);
 }
 
 function menuCbParseDoodle() {
   const ui = SpreadsheetApp.getUi();
   const items = SheetsManager.validateAndList();
   const entries = DoodleParser.parse();
-  entries.forEach((e) => {
-    Logger.log("%s", e);
-  });
   const dates = entries.map((e) => e.date);
   const from = dates.reduce(DateUtils.min);
   const until = dates.reduce(DateUtils.max);
-  ui.alert(`TODO check if there is a sheet ${from} until ${until}`);
-  if (items.length === 0) {
-    ui.alert("");
-    return;
+  // this would not work well if nobody said they can work on the first or last day...
+  let item = find(
+    items,
+    (i) => DateUtils.equal(i.from, from) && DateUtils.equal(i.until, until)
+  );
+  if (item === undefined) {
+    const text =
+      `Es gibt noch kein Tabellenblatt fuer den Zeitraum ${DateUtils.toISODate(
+        from
+      )} - ${DateUtils.toISODate(until)}\n` +
+      `Soll ein neues Blatt erstellt werden?`;
+    const res = ui.alert(text, ui.ButtonSet.OK_CANCEL);
+    if (res !== ui.Button.OK) {
+      return;
+    }
+    item = createNewItem(items, from, until);
   }
 }
 
