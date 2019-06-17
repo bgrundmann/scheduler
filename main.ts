@@ -494,17 +494,27 @@ namespace Locations {
     { name: "Online" },
   ].map((e, ndx) => ({ ndx, ...e }));
 
-  const doodle: Location[] = [{ name: "Doodle", ndx: theList.length }];
+  const planner: Location[] = [{ name: "Unverplant", ndx: theList.length }];
+  const doodle: Location[] = [{ name: "Doodle", ndx: theList.length + 1 }];
 
-  const theListWithDoodle: Location[] = theList.concat(doodle);
+  const theListWithPlanner: Location[] = theList.concat(planner);
+  const theListWithPlannerAndDoodle: Location[] = theListWithPlanner.concat(
+    doodle
+  );
 
   export function all(
-    mode: "include-doodle" | "exclude-doodle" | "only-doodle"
+    mode:
+      | "include-planner-and-doodle"
+      | "exclude-planner-and-doodle"
+      | "include-planner-exclude-doodle"
+      | "only-doodle"
   ): Location[] {
     switch (mode) {
-      case "include-doodle":
-        return theListWithDoodle;
-      case "exclude-doodle":
+      case "include-planner-exclude-doodle":
+        return theListWithPlanner;
+      case "include-planner-and-doodle":
+        return theListWithPlannerAndDoodle;
+      case "exclude-planner-and-doodle":
         return theList;
       case "only-doodle":
         return doodle;
@@ -612,7 +622,7 @@ namespace SheetLayouter {
   function getReferencesToSlotsForNthDay(
     scheduleSheetName: string,
     n: number,
-    mode: "exclude-doodle" | "include-doodle" | "only-doodle"
+    mode: "exclude-planner-and-doodle" | "only-doodle"
   ): string {
     return Locations.all(mode)
       .map((loc) => {
@@ -668,7 +678,7 @@ namespace SheetLayouter {
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     fromDate: Date,
     toDate: Date,
-    mode: "exclude-doodle" | "include-doodle" | "only-doodle"
+    mode: "exclude-planner-and-doodle" | "only-doodle"
   ): void {
     const scheduleSheetName = scheduleSheet.getName();
     sheet.clear();
@@ -723,7 +733,7 @@ namespace SheetLayouter {
   export function rangeOfEntriesOfDay(
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     date: Date,
-    mode: "include-doodle" | "exclude-doodle"
+    mode: "include-planner-exclude-doodle"
   ): {
     range: GoogleAppsScript.Spreadsheet.Range;
     row: number;
@@ -750,7 +760,7 @@ namespace SheetLayouter {
    */
   export function cellToSlot(
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
-    mode: "include-doodle" | "exclude-doodle",
+    mode: "include-planner-exclude-doodle",
     cell: { row: number; column: number }
   ): undefined | Slot {
     const dates = getDates(scheduleSheet);
@@ -851,7 +861,7 @@ namespace SheetLayouter {
         )
         .setVerticalAlignment("middle");
       // one box per entry (aka date + location) with 3 slots each
-      Locations.all("include-doodle").forEach((loc) => {
+      Locations.all("include-planner-and-doodle").forEach((loc) => {
         const col = columnOfEntry(loc);
 
         scheduleSheet.getRange(row, col, 1, 2).mergeAcross();
@@ -884,21 +894,24 @@ namespace SheetLayouter {
             row,
             INDEX_COLUMN,
             ROWS_PER_ENTRY,
-            1 + Locations.all("include-doodle").length * COLUMNS_PER_ENTRY
+            1 +
+              Locations.all("include-planner-and-doodle").length *
+                COLUMNS_PER_ENTRY
           )
           .setBackground(WEEKEND_COLOR);
       }
     });
     scheduleSheet.autoResizeColumn(INDEX_COLUMN);
     const headers: string[] = flatten(
-      Locations.all("include-doodle").map((loc) => [loc.name, ""])
+      Locations.all("include-planner-and-doodle").map((loc) => [loc.name, ""])
     );
     scheduleSheet
       .getRange(
         FIRST_ENTRY_ROW - 2,
         INDEX_COLUMN,
         1,
-        Locations.all("include-doodle").length * COLUMNS_PER_ENTRY + 1
+        Locations.all("include-planner-and-doodle").length * COLUMNS_PER_ENTRY +
+          1
       )
       .setValues([[""].concat(headers)])
       .setBackground("#F7CB4D")
@@ -906,7 +919,7 @@ namespace SheetLayouter {
     SheetUtils.autoResizeColumns(
       scheduleSheet,
       FIRST_ENTRY_COLUMN,
-      COLUMNS_PER_ENTRY * Locations.all("include-doodle").length,
+      COLUMNS_PER_ENTRY * Locations.all("include-planner-and-doodle").length,
       160
     );
     scheduleSheet.autoResizeRows(FIRST_ENTRY_ROW - 2, 1);
@@ -916,7 +929,7 @@ namespace SheetLayouter {
       scheduleSheet,
       fromDate,
       toDate,
-      "exclude-doodle"
+      "exclude-planner-and-doodle"
     );
     // Setup the sheet summing up the doodled minutes
     setupComputationSheet(
@@ -1326,7 +1339,7 @@ namespace EditHandler {
     const entries = SheetLayouter.rangeOfEntriesOfDay(
       sheet,
       slot.date,
-      "exclude-doodle"
+      "include-planner-exclude-doodle"
     );
     const cells = entries.range.getValues();
     const employeesInChangedCell = SlotParser.parse(
@@ -1378,10 +1391,14 @@ namespace EditHandler {
         case "change":
         case "clear":
         case "insert":
-          const slot = SheetLayouter.cellToSlot(sheet, "exclude-doodle", {
-            row: e.range.getRow(),
-            column: e.range.getColumn(),
-          });
+          const slot = SheetLayouter.cellToSlot(
+            sheet,
+            "include-planner-exclude-doodle",
+            {
+              row: e.range.getRow(),
+              column: e.range.getColumn(),
+            }
+          );
           if (slot !== undefined) {
             turnDuplicatesIntoMoves(sheet, slot);
           }
