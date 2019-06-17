@@ -41,6 +41,17 @@ function cellAsString(v: unknown): string {
   return String(v);
 }
 
+namespace Shift {
+  export interface T {
+    start: number;
+    stop: number;
+  }
+
+  export function equal(s1: T, s2: T): boolean {
+    return s1.start === s2.start && s1.stop === s2.stop;
+  }
+}
+
 namespace DateUtils {
   export function copy(d: Date): Date {
     return new Date(d.getTime());
@@ -393,7 +404,7 @@ namespace SlotParser {
   /** Parse a time range and return start time, stop time (in minutes since midnight) and
    * duration (in minutes).
    */
-  function parseTimeRange(
+  export function parseTimeRange(
     s: string
   ): { start: number; stop: number; duration: number } | undefined {
     const parts = s.split("-");
@@ -637,6 +648,21 @@ namespace SheetLayouter {
     return { from, until };
   }
 
+  function getDefaultTimeRanges(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet
+  ): {
+    whole: { start: number; stop: number; duration: number };
+    firstHalf: { start: number; stop: number; duration: number };
+    secondHalf: { start: number; stop: number; duration: number };
+  } {
+    const [[whole], [first], [second]] = sheet.getRange(1, 2, 3, 1).getValues();
+    return {
+      whole: SlotParser.parseTimeRange(String(whole))!,
+      firstHalf: SlotParser.parseTimeRange(String(first))!,
+      secondHalf: SlotParser.parseTimeRange(String(second))!,
+    };
+  }
+
   function setupComputationSheet(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -775,6 +801,14 @@ namespace SheetLayouter {
     scheduleSheet.setFrozenColumns(EMPLOYEE_COLUMNS);
     scheduleSheet.setColumnWidth(INDEX_COLUMN - 1, 5);
     scheduleSheet.setRowHeight(FIRST_ENTRY_ROW - 1, 5);
+    scheduleSheet
+      .getRange(1, 1, 3, 2)
+      .setValues([
+        ["Ganztags", "9:45-19:00"],
+        ["Vormittags", "9:45-14:00"],
+        ["Nachmittags", "13-19"],
+      ]);
+    scheduleSheet.getRange(1, 1, 3, 1).setFontWeight("bold");
     // setup pane on the left that shows computations.
     scheduleSheet
       .getRange(FIRST_ENTRY_ROW, 1, 1, 2)
@@ -916,6 +950,7 @@ namespace SheetLayouter {
     const doodle = Locations.all("only-doodle")[0];
     const { from, until } = getDates(scheduleSheet);
     const numDays = DateUtils.diff(until, from) + 1;
+    const defaults = getDefaultTimeRanges(scheduleSheet);
     const range = scheduleSheet.getRange(
       FIRST_ENTRY_ROW,
       FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY,
@@ -925,11 +960,20 @@ namespace SheetLayouter {
     const values = range.getValues();
     entries.forEach((entry) => {
       const row = DateUtils.diff(entry.date, from) * ROWS_PER_ENTRY;
-      // TODO figure out the shift to use and place accordingly
-      values[row][0] =
-        values[row][0] === ""
-          ? entry.employee
-          : values[row][0] + ", " + entry.employee;
+      function add(rowOff: number, colOff: number) {
+        const old = values[row + rowOff][colOff];
+        values[row + rowOff][colOff] =
+          old === "" ? entry.employee : old + ", " + entry.employee;
+      }
+      if (Shift.equal(entry, defaults.whole)) {
+        add(0, 0);
+      } else if (Shift.equal(entry, defaults.firstHalf)) {
+        add(1, 0);
+      } else if (Shift.equal(entry, defaults.secondHalf)) {
+        add(1, 1);
+      } else {
+        throw Error(`Huh? -- Don't know where to place this ${entry}`);
+      }
     });
     range.setValues(values);
   }
@@ -1424,6 +1468,7 @@ function menuCbParseDoodle() {
     }
     item = createNewItem(items, from, until);
   }
+  SheetLayouter.replaceDoodle(item.scheduleSheet, entries);
 }
 
 function menuCbHideWD() {
