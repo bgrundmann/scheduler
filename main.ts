@@ -1,8 +1,11 @@
 /** @OnlyCurrentDoc */
 // TODO:
-// - Add doodle parser functionality (into doodle column)
-// - Use schedulecount to parse the doodle after its placed in the doodle
-// - Use that to highlight "problems"
+// - A way to get list of problems (aka where we have scheduled someone who hasnt doodled)
+// - Deal with Saturdays
+// - More summaries of days worked etc (sparkline?)
+// - Ability to rerun doodle
+// - Ability to update after mitarbeiter was updated
+// - Dedup entries in poll
 
 function flatten<T>(a: T[][]): T[] {
   const empty: T[] = [];
