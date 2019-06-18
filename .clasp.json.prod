@@ -1,19 +1,4 @@
-{ "scriptId":"1GgNTRrnmG8hQsrk_DQwVk5biOdpWsNHrMOg2gZth1LCfQSaxBEIt1G3l",
- "filePushOrder": [
-    "prelude.ts",
-    "dateutils.ts",
-    "sheetutils.ts",
-    "values.ts",
-    "locations.ts",
-    "config.ts",
-    "entry.ts",
-    "datasheet.ts",
-    "doodleparser.ts",
-    "employeesheet.ts",
-    "pollsheet.ts",
-    "notesheet.ts",
-    "schedulesheet.ts",
-    "overview.ts",
-    "main.ts"
- ] 
+{
+  "scriptId": "1WjFUbiI6rJScuk4qwN4Ggrzc74zwNn-fTYNpBnp-HiARKfwOSvZy5jHK",
+  "filePushOrder": ["prelude.ts", "main.ts"]
 }
