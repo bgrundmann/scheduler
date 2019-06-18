@@ -491,10 +491,11 @@ namespace Locations {
   }
 
   const theList: Location[] = [
+    { name: "Marktgasse" },
     { name: "Ammergasse" },
     { name: "Buero" },
-    { name: "Marktgasse" },
     { name: "Online" },
+    { name: "Extras" },
   ].map((e, ndx) => ({ ndx, ...e }));
 
   const planner: Location[] = [{ name: "Unverplant", ndx: theList.length }];
