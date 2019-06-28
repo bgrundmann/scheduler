@@ -439,9 +439,18 @@ namespace SlotParser {
     }
   }
 
+  const commentRegex = /(^|[^0-9])-[^0-9]/;
+
   /** Parse the value of a slot. Throws an error if the input is invalid. */
   export function parse(slot: string): Item[] {
-    const employees = slot
+    const startOfComment = slot.search(commentRegex);
+    let slotWithoutComment = "";
+    if (startOfComment === -1) {
+      slotWithoutComment = slot;
+    } else {
+      slotWithoutComment = slot.slice(undefined, startOfComment);
+    }
+    const employees = slotWithoutComment
       .split(",")
       .map((s) => s.trim())
       .filter((s) => s !== "");
@@ -450,6 +459,7 @@ namespace SlotParser {
 
   /** Given the textual representation of a slot remove all occurrences of any
    * of the given employees.
+   * TODO: Deal with names in comments.
    */
   export function removeEmployees(slot: string, employees: string[]): string {
     const names = employees.join("|");
