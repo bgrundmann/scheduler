@@ -830,13 +830,54 @@ namespace SheetLayouter {
     return undefined;
   }
 
+  /** (Re-)create the formulas on the sheets.  Called both initially
+   * when the sheets are first populated and also on user demand when
+   * the user updated the employee list.  For the latter reason it must
+   * not touch any user data on the sheets.
+   * The date range passed in MUST match the date range on the schedule
+   * sheet.
+   */
+  export function updateFormulas({
+    scheduleSheet,
+    doodleSheet,
+    workSheet,
+    fromDate,
+    toDate,
+  }: {
+    scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet;
+    doodleSheet: GoogleAppsScript.Spreadsheet.Sheet;
+    workSheet: GoogleAppsScript.Spreadsheet.Sheet;
+    fromDate: Date;
+    toDate: Date;
+  }): void {
+    // Setup the sheet summing up the working minutes
+    setupComputationSheet(
+      workSheet,
+      scheduleSheet,
+      fromDate,
+      toDate,
+      "exclude-planner-and-doodle"
+    );
+    // Setup the sheet summing up the doodled minutes
+    setupComputationSheet(
+      doodleSheet,
+      scheduleSheet,
+      fromDate,
+      toDate,
+      "only-doodle"
+    );
+  }
+
+  /** The initial setup of a sheet.  Intended to be called exactly once for each sheet
+   * (immediately after creation of the sheet).
+   */
   export function setup(
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     workSheet: GoogleAppsScript.Spreadsheet.Sheet,
     doodleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     fromDate: Date,
     toDate: Date
-  ) {
+  ): void {
     function columnOfEntry(location: Locations.Location) {
       return FIRST_ENTRY_COLUMN + location.ndx * COLUMNS_PER_ENTRY;
     }
@@ -973,22 +1014,7 @@ namespace SheetLayouter {
       160
     );
     scheduleSheet.autoResizeRows(FIRST_ENTRY_ROW - 2, 1);
-    // Setup the sheet summing up the working minutes
-    setupComputationSheet(
-      workSheet,
-      scheduleSheet,
-      fromDate,
-      toDate,
-      "exclude-planner-and-doodle"
-    );
-    // Setup the sheet summing up the doodled minutes
-    setupComputationSheet(
-      doodleSheet,
-      scheduleSheet,
-      fromDate,
-      toDate,
-      "only-doodle"
-    );
+    updateFormulas({ scheduleSheet, doodleSheet, workSheet, fromDate, toDate });
     scheduleSheet
       .getRange(FIRST_ENTRY_ROW - 4, INDEX_COLUMN + 1, 2, 2)
       .setValues([["Von", fromDate], ["Bis", toDate]]);
@@ -1571,6 +1597,19 @@ function menuCbShowWD() {
   });
 }
 
+function menuCbEmployeesChanged() {
+  const items = SheetsManager.validateAndList();
+  items.forEach((item) => {
+    SheetLayouter.updateFormulas({
+      scheduleSheet: item.scheduleSheet,
+      doodleSheet: item.doodleSheet,
+      workSheet: item.workSheet,
+      fromDate: item.from,
+      toDate: item.until,
+    });
+  });
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   // Or DocumentApp or FormApp.
@@ -1581,5 +1620,7 @@ function onOpen() {
     .addSeparator()
     .addItem("Verstecke W, D.", "menuCbHideWD")
     .addItem("Zeige W, D.", "menuCbShowWD")
+    .addSeparator()
+    .addItem("Mitarbeiter wurden geaendert.", "menuCbEmployeesChanged")
     .addToUi();
 }
