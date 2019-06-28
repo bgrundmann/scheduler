@@ -711,13 +711,23 @@ namespace SheetLayouter {
     firstHalf: { start: number; stop: number; duration: number };
     secondHalf: { start: number; stop: number; duration: number };
   } {
-    const [[whole], [first], [second]] = sheet.getRange(1, 2, 3, 1).getValues();
+    const [[wholeCell], [first], [second]] = sheet
+      .getRange(1, 2, 3, 1)
+      .getValues();
+    const whole = SlotParser.parseTimeRange(String(wholeCell))!;
+    whole.duration = whole.duration - 60;
     return {
-      whole: SlotParser.parseTimeRange(String(whole))!,
+      whole,
       firstHalf: SlotParser.parseTimeRange(String(first))!,
       secondHalf: SlotParser.parseTimeRange(String(second))!,
     };
   }
+
+  const saturdayTimeRange = {
+    start: 9 * 60 + 45,
+    stop: 16 * 60,
+    duration: 6 * 60 + 15,
+  };
 
   function setupComputationSheet(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -745,18 +755,27 @@ namespace SheetLayouter {
       numEmployees + 1
     );
     const cells = theRange.getValues();
-    // TODO: store start and stop of default periods somewhere and read them when creating
-    // this sheet.
     const employees = a1(1, 2) + ":" + a1(1, numEmployees + 2 - 1);
-    const wholeDefault = 60 * 8;
-    const firstHalfDefault = 60 * 4;
-    const secondHalfDefault = 60 * 6;
-    const defaults = `${wholeDefault};${firstHalfDefault};${secondHalfDefault}`;
+    const defaults = getDefaultTimeRanges(scheduleSheet);
+    const times = `${defaults.whole.duration};${defaults.firstHalf.duration};${
+      defaults.secondHalf.duration
+    }`;
+    const saturdayTimes = `${saturdayTimeRange.duration};${
+      saturdayTimeRange.duration
+    };${saturdayTimeRange.duration}`;
     DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
       const row = nth + 1; // to skip the sum row
       const slots = getReferencesToSlotsForNthDay(scheduleSheetName, nth, mode);
+      let timesWeekdaySpecific = "";
+      if (date.getDay() === 6) {
+        timesWeekdaySpecific = saturdayTimes;
+      } else {
+        timesWeekdaySpecific = times;
+      }
       cells[row][0] = date;
-      cells[row][1] = `=SCHEDULECOUNT(${employees};${defaults};${slots})`;
+      cells[
+        row
+      ][1] = `=SCHEDULECOUNT(${employees};${timesWeekdaySpecific};${slots})`;
     });
     for (let e = 0; e < numEmployees; e++) {
       const thatColumn = a1Range(3, 2 + e, 3 + numDays - 1, 2 + e);
