@@ -1,10 +1,8 @@
 /** @OnlyCurrentDoc */
 // TODO:
 // - A way to get list of problems (aka where we have scheduled someone who hasnt doodled)
-// - Deal with Saturdays
 // - More summaries of days worked etc (sparkline?)
 // - Ability to rerun doodle
-// - Ability to update after mitarbeiter was updated
 // - Dedup entries in poll
 
 function flatten<T>(a: T[][]): T[] {
@@ -729,6 +727,12 @@ namespace SheetLayouter {
     duration: 6 * 60 + 15,
   };
 
+  const sundayTimeRange = {
+    start: 13 * 60,
+    stop: 18 * 60,
+    duration: 5 * 60 * 1.5,
+  };
+
   function setupComputationSheet(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -763,12 +767,18 @@ namespace SheetLayouter {
     const saturdayTimes = `${saturdayTimeRange.duration};${
       saturdayTimeRange.duration
     };${saturdayTimeRange.duration}`;
+    const sundayTimes = `${sundayTimeRange.duration};${
+      sundayTimeRange.duration
+    };${sundayTimeRange.duration}`;
     DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
       const row = nth + 1; // to skip the sum row
       const slots = getReferencesToSlotsForNthDay(scheduleSheetName, nth, mode);
       let timesWeekdaySpecific = "";
-      if (date.getDay() === 6) {
+      const wd = date.getDay();
+      if (wd === 6) {
         timesWeekdaySpecific = saturdayTimes;
+      } else if (wd === 0) {
+        timesWeekdaySpecific = sundayTimes;
       } else {
         timesWeekdaySpecific = times;
       }
