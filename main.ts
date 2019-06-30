@@ -1,5 +1,6 @@
 /** @OnlyCurrentDoc */
 // TODO:
+// - List of saturdays worked
 // - A way to get list of problems (aka where we have scheduled someone who hasnt doodled)
 // - More summaries of days worked etc (sparkline?)
 // - Ability to rerun doodle
