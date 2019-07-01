@@ -944,7 +944,7 @@ namespace SheetLayouter {
     for (let e = 0; e < numEmployees; e++) {
       const weekdaysWorked = a1Range(3, 3 + e, 3 + 7 - 1, 3 + e, workSheetName);
       a[e] = [
-        `=${a1(2, 2 + e, workSheetName)}/60`,
+        `=${a1(2, 3 + e, workSheetName)}/60`,
         `=SPARKLINE(${weekdaysWorked}; {"charttype"\\"column";"ymax"\\${yMax}})`,
       ];
     }
