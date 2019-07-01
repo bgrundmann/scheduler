@@ -157,6 +157,16 @@ namespace DateUtils {
     }
     return b;
   }
+
+  export const germanWeekDayNames = [
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sontag",
+  ];
 }
 
 namespace DoodleParser {
@@ -559,8 +569,7 @@ namespace EmployeeSheet {
       SpreadsheetApp.CopyPasteType.PASTE_VALUES,
       trueIfTransposed
     );
-    const numEmployees = src.getNumRows();
-    return numEmployees;
+    return employeeSheet.getLastRow() - 1;
   }
 
   export interface Employee {
@@ -633,7 +642,7 @@ namespace SheetLayouter {
     column2: number,
     sheetName?: string
   ): string {
-    return a1(row1, column1, sheetName) + ":" + a1(row2, column2, sheetName);
+    return a1(row1, column1, sheetName) + ":" + a1(row2, column2);
   }
 
   function getReferencesToSlotsForNthDay(
@@ -744,11 +753,11 @@ namespace SheetLayouter {
     const scheduleSheetName = scheduleSheet.getName();
     sheet.clear();
     sheet.clearConditionalFormatRules();
-    sheet.setFrozenRows(2);
-    sheet.setFrozenColumns(1);
+    sheet.setFrozenRows(1 + 1 + 7);
+    sheet.setFrozenColumns(2);
     const numDays = DateUtils.diff(toDate, fromDate) + 1;
     const numEmployees = EmployeeSheet.copyEmployees(
-      sheet.getRange(1, 2),
+      sheet.getRange(1, 3),
       "transposed"
     );
     sheet.getRange(1, 2, 1, numEmployees).setFontWeight("bold");
@@ -756,11 +765,11 @@ namespace SheetLayouter {
     const theRange = sheet.getRange(
       2,
       1,
-      numDays + 1, // +1 for the row of sums
-      numEmployees + 1
+      numDays + 1 + 7, // +1 for the row of sums + 7 for the number of weekday counters
+      numEmployees + 1 + 1 // + 1 for the date + 1 for the weekday
     );
     const cells = theRange.getValues();
-    const employees = a1(1, 2) + ":" + a1(1, numEmployees + 2 - 1);
+    const employees = a1(1, 3) + ":" + a1(1, 3 + numEmployees - 1);
     const defaults = getDefaultTimeRanges(scheduleSheet);
     const times = `${defaults.whole.duration};${defaults.firstHalf.duration};${
       defaults.secondHalf.duration
@@ -772,7 +781,7 @@ namespace SheetLayouter {
       sundayTimeRange.duration
     };${sundayTimeRange.duration}`;
     DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
-      const row = nth + 1; // to skip the sum row
+      const row = nth + 1 + 7; // to skip the sum row and the weekday counters
       const slots = getReferencesToSlotsForNthDay(scheduleSheetName, nth, mode);
       let timesWeekdaySpecific = "";
       const wd = date.getDay();
@@ -784,13 +793,28 @@ namespace SheetLayouter {
         timesWeekdaySpecific = times;
       }
       cells[row][0] = date;
+      cells[row][1] = `=WEEKDAY(${a1(row + 2, 1)};3)`;
       cells[
         row
-      ][1] = `=SCHEDULECOUNT(${employees};${timesWeekdaySpecific};${slots})`;
+      ][2] = `=SCHEDULECOUNT(${employees};${timesWeekdaySpecific};${slots})`;
     });
+    const weekdayColumn = a1Range(2 + 1 + 7, 2, 2 + 1 + 7 + numDays - 1, 2);
+    for (let wd = 0; wd < 7; wd++) {
+      cells[1 + wd][1] = DateUtils.germanWeekDayNames[wd];
+    }
     for (let e = 0; e < numEmployees; e++) {
-      const thatColumn = a1Range(3, 2 + e, 3 + numDays - 1, 2 + e);
-      cells[0][e + 1] = `=SUM(${thatColumn})`;
+      const thatColumn = a1Range(
+        2 + 1 + 7,
+        2 + 1 + e,
+        2 + 1 + 7 + numDays - 1,
+        2 + 1 + e
+      );
+      cells[0][e + 2] = `=SUM(${thatColumn})`;
+      for (let wd = 0; wd < 7; wd++) {
+        cells[1 + wd][
+          e + 2
+        ] = `=COUNTIFS(${weekdayColumn};ROW()-3;${thatColumn};">0")`;
+      }
     }
     theRange.setValues(cells);
   }
@@ -906,6 +930,34 @@ namespace SheetLayouter {
       toDate,
       "only-doodle"
     );
+    // setup pane on the left that shows computations.
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW, 1, 1, 2)
+      .setValues([["Mitarbeiter", "h"]])
+      .setFontWeight("bold");
+    const numEmployees = EmployeeSheet.copyEmployees(
+      scheduleSheet.getRange(FIRST_ENTRY_ROW + 1, 1)
+    );
+    const a = [];
+    const workSheetName = workSheet.getName();
+    const yMax = Math.ceil((DateUtils.diff(toDate, fromDate) + 1) / 7);
+    for (let e = 0; e < numEmployees; e++) {
+      const weekdaysWorked = a1Range(3, 3 + e, 3 + 7 - 1, 3 + e, workSheetName);
+      a[e] = [
+        `=${a1(2, 2 + e, workSheetName)}/60`,
+        `=SPARKLINE(${weekdaysWorked}; {"charttype"\\"column";"ymax"\\${yMax}})`,
+      ];
+    }
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW + 1, 2, numEmployees, 2)
+      .setValues(a);
+    const existingBandings = scheduleSheet
+      .getRange(FIRST_ENTRY_ROW, 1)
+      .getBandings();
+    existingBandings.forEach((b) => b.remove());
+    scheduleSheet
+      .getRange(FIRST_ENTRY_ROW, 1, numEmployees + 1, 3)
+      .applyRowBanding(SpreadsheetApp.BandingTheme.BLUE);
   }
 
   /** The initial setup of a sheet.  Intended to be called exactly once for each sheet
@@ -936,25 +988,6 @@ namespace SheetLayouter {
         ["Nachmittags", "13-19"],
       ]);
     scheduleSheet.getRange(1, 1, 3, 1).setFontWeight("bold");
-    // setup pane on the left that shows computations.
-    scheduleSheet
-      .getRange(FIRST_ENTRY_ROW, 1, 1, 2)
-      .setValues([["Mitarbeiter", "h"]])
-      .setFontWeight("bold");
-    const numEmployees = EmployeeSheet.copyEmployees(
-      scheduleSheet.getRange(FIRST_ENTRY_ROW + 1, 1)
-    );
-    const a = [];
-    const workSheetName = workSheet.getName();
-    for (let e = 0; e < numEmployees; e++) {
-      a[e] = [`=${a1(2, 2 + e, workSheetName)}/60`];
-    }
-    scheduleSheet
-      .getRange(FIRST_ENTRY_ROW + 1, 2, numEmployees, 1)
-      .setValues(a);
-    scheduleSheet
-      .getRange(FIRST_ENTRY_ROW, 1, numEmployees + 1, 2)
-      .applyRowBanding(SpreadsheetApp.BandingTheme.BLUE);
     // Setup the main scheduling section
     DateUtils.forEachDay(fromDate, toDate, (date, nth) => {
       const row = FIRST_ENTRY_ROW + nth * ROWS_PER_ENTRY;
