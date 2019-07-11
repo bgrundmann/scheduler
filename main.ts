@@ -512,6 +512,7 @@ namespace Locations {
   const theList: Location[] = [
     { name: "Marktgasse" },
     { name: "Ammergasse" },
+    { name: "Collegiumsgasse" },
     { name: "Buero" },
     { name: "Online" },
     { name: "Extras" },
