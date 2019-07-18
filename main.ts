@@ -526,6 +526,23 @@ namespace Locations {
     doodle
   );
 
+  /** Return the given Location, raises an error if there is no such location. */
+  export function byName(name: string): Location {
+    const res = find(theListWithPlannerAndDoodle, (l) => l.name === name);
+    if (res === undefined) {
+      throw Error(`Unbekannter Arbeitsplatz: ${name}`);
+    }
+    return res;
+  }
+
+  export function getDoodle(): Location {
+    return doodle[0];
+  }
+
+  export function getPlanner(): Location {
+    return planner[0];
+  }
+
   export function all(
     mode:
       | "include-planner-and-doodle"
@@ -576,19 +593,21 @@ namespace EmployeeSheet {
   export interface Employee {
     handle: string; // aka "andi"
     alias?: string; // aka "Der Boss"
+    defaultLocation?: string; // aka "Collegiumsgasse"
   }
 
   /** Return a dictionary from both names and aliases to */
   export function get(): Record<string, Employee> {
     const employeeSheet = getSheet();
     const src = employeeSheet
-      .getRange(2, 1, employeeSheet.getLastRow(), 2)
+      .getRange(2, 1, employeeSheet.getLastRow(), 3)
       .getValues();
     const res: Record<string, Employee> = {};
     src.forEach((row) => {
       const handle = String(row[0]);
       const alias = row[1] !== "" ? String(row[1]) : undefined;
-      const employee = { handle, alias };
+      const defaultLocation = row[2] !== "" ? String(row[2]) : undefined;
+      const employee = { handle, alias, defaultLocation };
       if (alias !== undefined) {
         res[alias] = employee;
       }
@@ -1105,6 +1124,9 @@ namespace SheetLayouter {
     // sheet.getRangeList(["B1", "D1"]).setNumberFormat("yyyy-mm-dd");
   }
 
+  /** Replace the content of the doodle section with what is on the "Umfrage" sheet.
+   * The current implementation does not work well if there is already content.
+   */
   export function replaceDoodle(
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
     entries: DoodleParser.Entry[]
@@ -1113,49 +1135,55 @@ namespace SheetLayouter {
     // times (in particular after planning has started) and it should
     // do the right thing (TM).
     // TODO: check that sheet mentions what the default times are...
-    const doodle = Locations.all("only-doodle")[0];
+    const doodle = Locations.getDoodle();
+    const planner = Locations.getPlanner();
     const { from, until } = getDates(scheduleSheet);
     const numDays = DateUtils.diff(until, from) + 1;
     const defaults = getDefaultTimeRanges(scheduleSheet);
     const range = scheduleSheet.getRange(
+      FIRST_ENTRY_ROW,
+      FIRST_ENTRY_COLUMN,
+      numDays * ROWS_PER_ENTRY,
+      COLUMNS_PER_ENTRY * Locations.all("include-planner-and-doodle").length
+    );
+    const doodleRange = scheduleSheet.getRange(
       FIRST_ENTRY_ROW,
       FIRST_ENTRY_COLUMN + doodle.ndx * COLUMNS_PER_ENTRY,
       numDays * ROWS_PER_ENTRY,
       COLUMNS_PER_ENTRY
     );
     const values = range.getValues();
-    // Clear content if any
+    const doodleValues = doodleRange.getValues();
+    // Clear content if any from doodle and planner
     values.forEach((row) => {
-      for (let i = 0; i < row.length; i++) {
-        row[i] = "";
+      for (let i = 0; i < COLUMNS_PER_ENTRY; i++) {
+        row[doodle.ndx * COLUMNS_PER_ENTRY + i] = "";
+      }
+      for (let i = 0; i < COLUMNS_PER_ENTRY; i++) {
+        row[planner.ndx * COLUMNS_PER_ENTRY + i] = "";
       }
     });
     entries.forEach((entry) => {
       const row = DateUtils.diff(entry.date, from) * ROWS_PER_ENTRY;
-      function add(rowOff: number, colOff: number) {
-        const old = values[row + rowOff][colOff];
-        values[row + rowOff][colOff] =
+      function addTo(loc: Locations.Location, rowOff: number, colOff: number) {
+        const old = values[row + rowOff][loc.ndx * COLUMNS_PER_ENTRY + colOff];
+        values[row + rowOff][loc.ndx * COLUMNS_PER_ENTRY + colOff] =
           old === "" ? entry.employee : old + ", " + entry.employee;
       }
       if (Shift.equal(entry, defaults.whole)) {
-        add(0, 0);
+        addTo(doodle, 0, 0);
+        addTo(planner, 0, 0);
       } else if (Shift.equal(entry, defaults.firstHalf)) {
-        add(1, 0);
+        addTo(doodle, 1, 0);
+        addTo(planner, 1, 0);
       } else if (Shift.equal(entry, defaults.secondHalf)) {
-        add(1, 1);
+        addTo(doodle, 1, 1);
+        addTo(planner, 1, 1);
       } else {
         throw Error(`Huh? -- Don't know where to place this ${entry}`);
       }
     });
     range.setValues(values);
-    const planner = Locations.all("only-planner")[0];
-    const plannerRange = scheduleSheet.getRange(
-      FIRST_ENTRY_ROW,
-      FIRST_ENTRY_COLUMN + planner.ndx * COLUMNS_PER_ENTRY,
-      numDays * ROWS_PER_ENTRY,
-      COLUMNS_PER_ENTRY
-    );
-    plannerRange.setValues(values);
   }
 }
 
