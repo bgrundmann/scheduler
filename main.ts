@@ -340,10 +340,11 @@ namespace DoodleParser {
   /** Parse the doodle sheet (which must be called Umfrage) and return a list of entries found.
    * Throws an error if it couldn't parse an entry.
    */
-  export function parse(): Entry[] {
+  export function parse(
+    employees: Record<string, EmployeeSheet.Employee>
+  ): Entry[] {
     const ss = SpreadsheetApp.getActive();
     const doodle = ss.getSheetByName("Umfrage");
-    const employeeDict = EmployeeSheet.get();
     const monthAndYears = parseMergedRow(doodle, 4, 2, doodle.getLastColumn());
     const days = parseMergedRow(doodle, 5, 2, doodle.getLastColumn());
     const times = parseMergedRow(doodle, 6, 2, doodle.getLastColumn());
@@ -362,10 +363,10 @@ namespace DoodleParser {
       // But values array is 0 based
       for (const row of values) {
         const parsedName = row[0].toString();
-        if (!(parsedName in employeeDict)) {
+        if (!(parsedName in employees)) {
           throw Error(`Unbekannter Mitarbeiter ${parsedName}`);
         }
-        const employee = employeeDict[parsedName].handle;
+        const employee = employees[parsedName].handle;
         const ok = row[c - 1] === "OK";
         if (ok) {
           const date = new Date(d.year, d.month, d.day);
@@ -1129,7 +1130,8 @@ namespace SheetLayouter {
    */
   export function replaceDoodle(
     scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
-    entries: DoodleParser.Entry[]
+    entries: DoodleParser.Entry[],
+    employees: Record<string, EmployeeSheet.Employee>
   ) {
     // TODO: Make it such that one can run this function multiple
     // times (in particular after planning has started) and it should
@@ -1170,15 +1172,23 @@ namespace SheetLayouter {
         values[row + rowOff][loc.ndx * COLUMNS_PER_ENTRY + colOff] =
           old === "" ? entry.employee : old + ", " + entry.employee;
       }
+      let initialLoc = planner;
+      if (employees[entry.employee] !== undefined) {
+        if (employees[entry.employee].defaultLocation !== undefined) {
+          initialLoc = Locations.byName(
+            employees[entry.employee].defaultLocation!
+          );
+        }
+      }
       if (Shift.equal(entry, defaults.whole)) {
         addTo(doodle, 0, 0);
-        addTo(planner, 0, 0);
+        addTo(initialLoc, 0, 0);
       } else if (Shift.equal(entry, defaults.firstHalf)) {
         addTo(doodle, 1, 0);
-        addTo(planner, 1, 0);
+        addTo(initialLoc, 1, 0);
       } else if (Shift.equal(entry, defaults.secondHalf)) {
         addTo(doodle, 1, 1);
-        addTo(planner, 1, 1);
+        addTo(initialLoc, 1, 1);
       } else {
         throw Error(`Huh? -- Don't know where to place this ${entry}`);
       }
@@ -1659,7 +1669,8 @@ function menuCbNewSchedule() {
 function menuCbParseDoodle() {
   const ui = SpreadsheetApp.getUi();
   const items = SheetsManager.validateAndList();
-  const entries = DoodleParser.parse();
+  const employees = EmployeeSheet.get();
+  const entries = DoodleParser.parse(employees);
   const dates = entries.map((e) => e.date);
   const from = dates.reduce(DateUtils.min);
   const until = dates.reduce(DateUtils.max);
@@ -1680,7 +1691,7 @@ function menuCbParseDoodle() {
     }
     item = createNewItem(items, from, until);
   }
-  SheetLayouter.replaceDoodle(item.scheduleSheet, entries);
+  SheetLayouter.replaceDoodle(item.scheduleSheet, entries, employees);
 }
 
 function menuCbHideWD() {
